@@ -124,6 +124,10 @@ export function createAgent(options: AgentOptions): Agent {
           }
         } catch (err) {
           if (!controller.signal.aborted) {
+            // Surface the original stack so silent "Unknown type"-style
+            // failures from tool execution aren't demoted to a UI string
+            // with no console trace.
+            console.error("[moongazer] agent run error:", err);
             emitter.emit({ type: "error", error: err });
           } else {
             emitter.emit({ type: "abort" });
