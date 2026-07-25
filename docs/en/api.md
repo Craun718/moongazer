@@ -9,6 +9,7 @@
 - [AgentEvent](#agentevent)
 - [AgentMessage](#agentmessage)
 - [AgentTool](#agenttool)
+- [defineTool](#definetool)
 - [AgentRunHandle](#agentrunhandle)
 - [TransportEvent](#transportevent)
 - [OpenAIRawStream](#openairawstream)
@@ -245,35 +246,51 @@ interface ToolCallPart {
 
 ## AgentTool
 
-Tool definition. `parameters` uses JSON Schema to describe arguments.
+Tool definition. `parameters` is a [TypeBox](https://www.npmjs.com/package/@sinclair/typebox) `TObject` schema — it doubles as the JSON Schema sent to the model and as the compile-time type of `execute`'s argument (via `Static<T>`), so the schema and the handler can no longer drift apart.
 
 ```typescript
-interface AgentTool<TArgs = Record<string, unknown>> {
+import { Type, type Static } from "moongazer";
+
+interface AgentTool<T extends TObject = TObject> {
     name: string;
     description: string;
-    parameters: Record<string, unknown>;
-    execute: (args: TArgs) => Promise<unknown> | unknown;
+    /** TypeBox object schema; serialized as JSON Schema for the model */
+    parameters: T;
+    execute: (args: Static<T>) => Promise<unknown> | unknown;
 }
+```
+
+Before each invocation, the agent runtime runs `Value.Cast(tool.parameters, parsedArgs)` over the JSON the model returned. This fills schema `default` values and applies basic type coercion, so `execute` receives a well-formed value; cast errors are surfaced as an `error` event.
+
+## defineTool
+
+Inferred-type helper and the recommended way to build a tool. `T` is inferred from `parameters`, so you never annotate the generic by hand and `execute`'s argument type stays in sync with the schema.
+
+```typescript
+function defineTool<T extends TObject>(opts: {
+    name: string;
+    description: string;
+    parameters: T;
+    execute: (args: Static<T>) => Promise<unknown> | unknown;
+}): AgentTool<T>;
 ```
 
 #### Example
 
 ```typescript
-const searchTool: AgentTool<{ query: string }> = {
+import { defineTool, Type } from "moongazer";
+
+const searchTool = defineTool({
     name: "web_search",
     description: "Search the internet",
-    parameters: {
-        type: "object",
-        properties: {
-            query: { type: "string", description: "Search query" },
-        },
-        required: ["query"],
-    },
+    parameters: Type.Object({
+        query: Type.String({ description: "Search query" }),
+    }),
     execute: async ({ query }) => {
-        // implement search logic
+        // `query` is typed as `string`
         return `Results for "${query}" ...`;
     },
-};
+});
 ```
 
 ---
@@ -355,6 +372,8 @@ interface OpenAIWireFunctionCall {
 ---
 
 ## Constants
+
+`Type` and `Static` are re-exported from `@sinclair/typebox` so callers can build schemas with a single import surface.
 
 | Name                | Value | Description                          |
 | ------------------- | ----- | ------------------------------------ |

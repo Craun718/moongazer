@@ -2,6 +2,8 @@ import { createEmitter } from "./emitter";
 import type { ChatTransport } from "./transport";
 import type { AgentEvent, AgentMessage, AgentRunHandle, AgentTool, ToolCallPart } from "./types";
 
+import { Value } from "@sinclair/typebox/value";
+
 export interface Agent {
   registerTool(tool: AgentTool): void;
   run(options: RunOptions): AgentRunHandle;
@@ -107,7 +109,9 @@ export function createAgent(options: AgentOptions): Agent {
             for (const call of roundCalls) {
               const tool = tools.get(call.name);
               const args = parseArgs(call.arguments);
-              const outcome = tool ? await tool.execute(args) : `Unknown tool: ${call.name}`;
+              const outcome = tool
+                ? await tool.execute(Value.Cast(tool.parameters, args))
+                : `Unknown tool: ${call.name}`;
               const result = typeof outcome === "string" ? outcome : JSON.stringify(outcome);
               context.push({ role: "tool", toolCallId: call.id, content: result });
               emitter.emit({ type: "tool_result", id: call.id, result });

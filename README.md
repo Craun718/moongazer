@@ -9,10 +9,11 @@ A lightweight, framework-agnostic TypeScript library for building LLM agent loop
 ### Features
 
 - **Provider-agnostic** — adapt any LLM provider via the `ChatTransport` interface
+- **Type-safe tools** — define tools with TypeBox schemas; the `execute` argument type is inferred from the schema, and the model's JSON is coerced/validated at runtime via `Value.Cast`
 - **Tool calls** — native function calling with automatic reassembly of streaming tool-call deltas
 - **Event-driven** — the agent runtime exposes `AgentEvent` via a subscriber pattern, making it easy to integrate with logging, storage, and UI
 - **Abort support** — safely abort an in-flight run while keeping content already received
-- **Zero runtime dependencies** — the core library has no runtime dependencies (the OpenAI adapter only defines TypeScript types, no `openai` package dependency)
+- **Minimal dependencies** — only `@sinclair/typebox` as a runtime dependency (the OpenAI adapter defines TypeScript types only, no `openai` package)
 
 ## Installation
 
@@ -23,24 +24,20 @@ pnpm add moongazer
 ## Quick Start
 
 ```typescript
-import { createAgent, createOpenAITransport } from "moongazer";
+import { createAgent, createOpenAITransport, defineTool, Type } from "moongazer";
 import type { OpenAIRawStream } from "moongazer";
 
 // 1. Define a tool
-const getWeather = {
+const getWeather = defineTool({
   name: "get_weather",
   description: "Get weather for a city",
-  parameters: {
-    type: "object",
-    properties: {
-      city: { type: "string" },
-    },
-    required: ["city"],
-  },
-  execute: async ({ city }: { city: string }) => {
+  parameters: Type.Object({
+    city: Type.String(),
+  }),
+  execute: async ({ city }) => {
     return `Weather in ${city}: sunny, 22°C`;
   },
-};
+});
 
 // 2. Create OpenAI transport
 const rawStream: OpenAIRawStream = async function* (request, signal) {
@@ -76,7 +73,8 @@ handle.subscribe((event) => {
 ```
 src/
 ├── index.ts              # Public exports
-├── types.ts              # Domain types
+├── types.ts              # Domain types (AgentTool, AgentMessage, ...)
+├── tool.ts               # defineTool helper (TypeBox schema -> typed tool)
 ├── transport.ts          # ChatTransport interface
 ├── agent.ts              # Agent runtime (createAgent)
 ├── emitter.ts            # Lightweight emitter

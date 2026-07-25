@@ -19,5 +19,8 @@
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.52"
   }
 }

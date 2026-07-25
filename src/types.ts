@@ -6,6 +6,8 @@
  * `adapters/openai.ts` translates to/from that format.
  */
 
+import type { TObject, Static } from "@sinclair/typebox";
+
 export type AgentRole = "system" | "user" | "assistant" | "tool";
 
 export interface ToolCallPart {
@@ -25,12 +27,15 @@ export interface AgentMessage {
   toolCallId?: string;
 }
 
-export interface AgentTool<TArgs extends Record<string, unknown> = Record<string, unknown>> {
+export interface AgentTool<T extends TObject = TObject> {
   name: string;
   description: string;
-  /** JSON Schema describing the tool's parameters. */
-  parameters: Record<string, unknown>;
-  execute: (args: TArgs) => Promise<unknown> | unknown;
+  /**
+   * TypeBox object schema describing the tool's parameters. Also serves as the
+   * JSON Schema sent to the model (symbol metadata is stripped on serialization).
+   */
+  parameters: T;
+  execute: (args: Static<T>) => Promise<unknown> | unknown;
 }
 
 export type AgentEvent =

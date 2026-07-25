@@ -1,6 +1,6 @@
-# API 参考 / API Reference
+# API 参考
 
-## 目录 / Table of Contents
+## 目录
 
 - [createAgent](#createagent)
 - [createOpenAITransport](#createopentransport)
@@ -9,6 +9,7 @@
 - [AgentEvent](#agentevent)
 - [AgentMessage](#agentmessage)
 - [AgentTool](#agenttool)
+- [defineTool](#definetool)
 - [AgentRunHandle](#agentrunhandle)
 - [TransportEvent](#transportevent)
 - [OpenAIRawStream](#openairawstream)
@@ -17,8 +18,7 @@
 
 ## createAgent
 
-创建代理实例。持有独立的工具注册表和中止控制器，多个代理可并发运行，无模块级单例。  
-Creates an agent instance with its own tool registry and abort controller, allowing multiple agents to run concurrently without module-level singletons.
+创建代理实例。持有独立的工具注册表和中止控制器，多个代理可并发运行，无模块级单例。
 
 ```typescript
 function createAgent(options: AgentOptions): Agent;
@@ -26,31 +26,31 @@ function createAgent(options: AgentOptions): Agent;
 
 ### AgentOptions
 
-| 属性 / Property | 类型 / Type     | 默认值 / Default     | 描述 / Description                                    |
-| --------------- | --------------- | -------------------- | ----------------------------------------------------- |
-| `transport`     | `ChatTransport` | —（必填 / required） | 流式聊天传输层 / Streaming chat transport             |
-| `tools`         | `AgentTool[]`   | `[]`                 | 初始工具列表 / Initial tool list                      |
-| `maxSteps`      | `number`        | `6`                  | 工具调用最大轮次，防止无限循环 / Max tool round-trips |
+| 属性        | 类型            | 默认值    | 描述                           |
+| ----------- | --------------- | --------- | ------------------------------ |
+| `transport` | `ChatTransport` | —（必填） | 流式聊天传输层                 |
+| `tools`     | `AgentTool[]`   | `[]`      | 初始工具列表                   |
+| `maxSteps`  | `number`        | `6`       | 工具调用最大轮次，防止无限循环 |
 
 ### Agent
 
 ```typescript
 interface Agent {
-    /** 注册一个工具 / Register a tool */
+    /** 注册一个工具 */
     registerTool(tool: AgentTool): void;
-    /** 运行代理 / Run the agent */
+    /** 运行代理 */
     run(options: RunOptions): AgentRunHandle;
 }
 ```
 
 #### RunOptions
 
-| 属性 / Property | 类型 / Type      | 默认值 / Default | 描述 / Description                            |
-| --------------- | ---------------- | ---------------- | --------------------------------------------- |
-| `messages`      | `AgentMessage[]` | —（必填）        | 对话历史（不会被变异） / Conversation history |
-| `signal`        | `AbortSignal`    | —                | 外部中止信号 / External abort signal          |
+| 属性       | 类型             | 默认值    | 描述                   |
+| ---------- | ---------------- | --------- | ---------------------- |
+| `messages` | `AgentMessage[]` | —（必填） | 对话历史（不会被变异） |
+| `signal`   | `AbortSignal`    | —         | 外部中止信号           |
 
-#### 示例 / Example
+#### 示例
 
 ```typescript
 const agent = createAgent({
@@ -72,8 +72,7 @@ handle.subscribe((event) => {
 
 ## createOpenAITransport
 
-将 OpenAI 兼容的原始流包装为提供者无关的 `ChatTransport`。负责将 `AgentMessage`/`AgentTool` 翻译为 OpenAI 线路格式，并重组碎片化的流式工具调用参数。  
-Wraps an OpenAI-compatible raw stream into a provider-agnostic `ChatTransport`. Translates `AgentMessage`/`AgentTool` into OpenAI wire format and reassembles fragmented streaming tool-call deltas.
+将 OpenAI 兼容的原始流包装为提供者无关的 `ChatTransport`。负责将 `AgentMessage`/`AgentTool` 翻译为 OpenAI 线路格式，并重组碎片化的流式工具调用参数。
 
 ```typescript
 function createOpenAITransport(raw: OpenAIRawStream): ChatTransport;
@@ -88,8 +87,7 @@ type OpenAIRawStream = (
 ) => AsyncIterable<OpenAIChatChunk>;
 ```
 
-应用程序拥有 URL、鉴权和传输机制（例如 SSE）；只需在数据到达时 yield chunk，在鉴权失败时 reject。  
-The application owns the URL, auth, and transport mechanism (e.g. SSE); it only needs to yield chunks as they arrive and reject on auth errors.
+应用程序拥有 URL、鉴权和传输机制（例如 SSE）；只需在数据到达时 yield chunk，在鉴权失败时 reject。
 
 #### OpenAIRawRequest
 
@@ -101,7 +99,7 @@ interface OpenAIRawRequest {
 }
 ```
 
-#### 示例 / Example
+#### 示例
 
 ```typescript
 const rawStream: OpenAIRawStream = async function* (request, signal) {
@@ -121,7 +119,7 @@ const rawStream: OpenAIRawStream = async function* (request, signal) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        // ... parse SSE "data: ..." lines and yield OpenAIChatChunk
+        // ... 解析 SSE "data: ..." 行并 yield OpenAIChatChunk
     }
 };
 
@@ -132,8 +130,7 @@ const transport = createOpenAITransport(rawStream);
 
 ## createEmitter
 
-创建轻量级事件发射器，支持多个订阅者。每个运行可通过多个订阅者同时被日志、存储适配器和遥测观察。  
-Creates a minimal zero-dependency emitter supporting multiple subscribers, so a run can be observed by a logger, a store adapter, and telemetry simultaneously.
+创建轻量级事件发射器，支持多个订阅者。每个运行可通过多个订阅者同时被日志、存储适配器和遥测观察。
 
 ```typescript
 function createEmitter<T>(): Emitter<T>;
@@ -153,8 +150,7 @@ interface Emitter<T> {
 
 ## ChatTransport
 
-提供者无关的流式传输接口。代理循环仅依赖此接口；每个提供商通过适配器（如 `createOpenAITransport`）实现它。  
-Provider-agnostic streaming transport. The agent loop depends only on this interface; each provider implements it via an adapter.
+提供者无关的流式传输接口。代理循环仅依赖此接口；每个提供商通过适配器（如 `createOpenAITransport`）实现它。
 
 ```typescript
 interface ChatTransport {
@@ -181,18 +177,17 @@ type TransportEvent =
     | { type: "finish"; reason: string };
 ```
 
-| 事件类型 / Type | 描述 / Description                  |
-| --------------- | ----------------------------------- |
-| `content`       | 文本增量 / Text delta               |
-| `tool_calls`    | 工具调用（已重组完成） / Tool calls |
-| `finish`        | 流结束及原因 / Stream finished      |
+| 事件类型     | 描述                   |
+| ------------ | ---------------------- |
+| `content`    | 文本增量               |
+| `tool_calls` | 工具调用（已重组完成） |
+| `finish`     | 流结束及原因           |
 
 ---
 
 ## AgentEvent
 
-代理运行时在运行期间发出的所有事件。通过 `AgentRunHandle.subscribe` 订阅。  
-All events emitted by the agent runtime during a run. Subscribe via `AgentRunHandle.subscribe`.
+代理运行时在运行期间发出的所有事件。通过 `AgentRunHandle.subscribe` 订阅。
 
 ```typescript
 type AgentEvent =
@@ -205,22 +200,21 @@ type AgentEvent =
     | { type: "abort" };
 ```
 
-| 事件类型 / Type   | 描述 / Description                            |
-| ----------------- | --------------------------------------------- |
-| `assistant_start` | 助手开始响应 / Assistant started responding   |
-| `content`         | 文本增量 / Text delta                         |
-| `tool_calls`      | 模型请求工具调用 / Model requested tool calls |
-| `tool_result`     | 工具执行完成 / Tool execution completed       |
-| `done`            | 运行正常结束 / Run completed normally         |
-| `error`           | 运行出错 / Run encountered an error           |
-| `abort`           | 运行被中止 / Run was aborted                  |
+| 事件类型          | 描述             |
+| ----------------- | ---------------- |
+| `assistant_start` | 助手开始响应     |
+| `content`         | 文本增量         |
+| `tool_calls`      | 模型请求工具调用 |
+| `tool_result`     | 工具执行完成     |
+| `done`            | 运行正常结束     |
+| `error`           | 运行出错         |
+| `abort`           | 运行被中止       |
 
 ---
 
 ## AgentMessage
 
-对话消息的提供者无关表示。  
-Provider-agnostic representation of a conversation message.
+对话消息的提供者无关表示。
 
 ```typescript
 interface AgentMessage {
@@ -243,7 +237,7 @@ type AgentRole = "system" | "user" | "assistant" | "tool";
 interface ToolCallPart {
     id: string;
     name: string;
-    /** 模型发出的原始 JSON 参数字符串 / Raw JSON arguments string from the model */
+    /** 模型发出的原始 JSON 参数字符串 */
     arguments: string;
 }
 ```
@@ -252,44 +246,58 @@ interface ToolCallPart {
 
 ## AgentTool
 
-工具定义。`parameters` 使用 JSON Schema 描述参数。  
-Tool definition. `parameters` uses JSON Schema to describe arguments.
+工具定义。`parameters` 是一个 TypeBox `TObject` schema —— 它同时作为发送给模型的 JSON Schema 和 `execute` 入参的编译期类型（通过 `Static<T>`），因此 schema 与处理函数不会再失配。
 
 ```typescript
-interface AgentTool<TArgs = Record<string, unknown>> {
+import { Type, type Static } from "moongazer";
+
+interface AgentTool<T extends TObject = TObject> {
     name: string;
     description: string;
-    parameters: Record<string, unknown>;
-    execute: (args: TArgs) => Promise<unknown> | unknown;
+    /** TypeBox 对象 schema；序列化为 JSON Schema 发给模型 */
+    parameters: T;
+    execute: (args: Static<T>) => Promise<unknown> | unknown;
 }
 ```
 
-#### 示例 / Example
+每次调用前，代理运行时会对模型返回的 JSON 执行 `Value.Cast(tool.parameters, parsedArgs)`，填充 schema 的 `default` 值并做基本类型强制转换，确保 `execute` 拿到结构正确的值；转换出错会作为 `error` 事件抛出。
+
+## defineTool
+
+带类型推断的辅助函数，是构建工具的推荐方式。`T` 由 `parameters` 推断，无需手写泛型，`execute` 的入参类型始终与 schema 同步。
 
 ```typescript
-const searchTool: AgentTool<{ query: string }> = {
+function defineTool<T extends TObject>(opts: {
+    name: string;
+    description: string;
+    parameters: T;
+    execute: (args: Static<T>) => Promise<unknown> | unknown;
+}): AgentTool<T>;
+```
+
+#### 示例
+
+```typescript
+import { defineTool, Type } from "moongazer";
+
+const searchTool = defineTool({
     name: "web_search",
-    description: "搜索互联网 / Search the internet",
-    parameters: {
-        type: "object",
-        properties: {
-            query: { type: "string", description: "搜索关键词" },
-        },
-        required: ["query"],
-    },
+    description: "搜索互联网",
+    parameters: Type.Object({
+        query: Type.String({ description: "搜索关键词" }),
+    }),
     execute: async ({ query }) => {
-        // 实现搜索逻辑 / implement search logic
+        // `query` 类型为 `string`
         return `Results for "${query}" ...`;
     },
-};
+});
 ```
 
 ---
 
 ## AgentRunHandle
 
-控制正在运行的代理。  
-Controls a running agent.
+控制正在运行的代理。
 
 ```typescript
 interface AgentRunHandle {
@@ -298,17 +306,16 @@ interface AgentRunHandle {
 }
 ```
 
-| 方法 / Method | 描述 / Description                                         |
-| ------------- | ---------------------------------------------------------- |
-| `subscribe`   | 订阅代理事件，返回取消订阅函数 / Subscribe to agent events |
-| `stop`        | 中止运行，保留已收到的部分内容 / Abort the run             |
+| 方法        | 描述                           |
+| ----------- | ------------------------------ |
+| `subscribe` | 订阅代理事件，返回取消订阅函数 |
+| `stop`      | 中止运行，保留已收到的部分内容 |
 
 ---
 
-## OpenAI 线路类型 / OpenAI Wire Types
+## OpenAI 线路类型
 
-这些类型用于与 OpenAI 兼容 API 交互时描述线路格式。无运行时依赖。  
-These types describe the wire format for interacting with OpenAI-compatible APIs. No runtime dependency.
+这些类型用于与 OpenAI 兼容 API 交互时描述线路格式。无运行时依赖。
 
 ### OpenAIChatChunk / OpenAIChoice / OpenAIDelta / OpenAIToolCallDelta
 
@@ -364,8 +371,10 @@ interface OpenAIWireFunctionCall {
 
 ---
 
-## 常量 / Constants
+## 常量
 
-| 名称 / Name         | 值 / Value | 描述 / Description                                         |
-| ------------------- | ---------- | ---------------------------------------------------------- |
-| `DEFAULT_MAX_STEPS` | `6`        | `createAgent` 的默认最大工具轮次 / Default max tool rounds |
+`Type` 与 `Static` 从 `@sinclair/typebox` 重新导出，调用者用单一导入即可构建 schema。
+
+| 名称                | 值  | 描述                              |
+| ------------------- | --- | --------------------------------- |
+| `DEFAULT_MAX_STEPS` | `6` | `createAgent` 的默认最大工具轮次  |

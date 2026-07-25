@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Type } from "@sinclair/typebox";
 import { createAgent } from "./agent";
 import type { Agent } from "./agent";
 import type { ChatTransport, TransportEvent } from "./transport";
@@ -53,7 +54,7 @@ describe("createAgent", () => {
     const agent = createAgent({
       transport,
       tools: [
-        { name: "get_current_time", description: "time", parameters: { type: "object" }, execute: () => "11:37" },
+        { name: "get_current_time", description: "time", parameters: Type.Object({}), execute: () => "11:37" },
       ],
     });
 
@@ -82,10 +83,10 @@ describe("createAgent", () => {
       { type: "tool_calls", calls: [{ id: "x", name: "f", arguments: "{}" }] },
     ];
     const transport = scriptedTransport([loop, loop, loop, loop]);
-    const agent = createAgent({
-      transport,
-      tools: [{ name: "f", description: "", parameters: { type: "object" }, execute: () => "r" }],
-      maxSteps: 2,
+   const agent = createAgent({
+     transport,
+     tools: [{ name: "f", description: "", parameters: Type.Object({}), execute: () => "r" }],
+     maxSteps: 2,
     });
 
     const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
@@ -122,5 +123,69 @@ describe("createAgent", () => {
     );
     expect(deltas.map((e) => e.delta)).toEqual(["x"]);
     expect(events.at(-1)).toMatchObject({ type: "abort" });
+  });
+
+  it("decodes the model's tool-call JSON before invoking execute", async () => {
+    let received: unknown = undefined;
+    const transport = scriptedTransport([
+      [
+        {
+          type: "tool_calls",
+          calls: [{ id: "c1", name: "weather", arguments: '{"city":"Paris"}' }],
+        },
+      ],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        {
+          name: "weather",
+          description: "weather",
+          parameters: Type.Object({ city: Type.String() }),
+          execute: (args) => {
+            received = args;
+            return "sunny";
+          },
+        },
+      ],
+    });
+
+    const events = await runToCompletion(agent, [{ role: "user", content: "paris weather" }]);
+
+    expect(received).toEqual({ city: "Paris" });
+    const result = events.find((e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result");
+    expect(result?.result).toBe("sunny");
+  });
+
+  it("applies schema defaults during decode", async () => {
+    let received: unknown = undefined;
+    const transport = scriptedTransport([
+      [
+        {
+          type: "tool_calls",
+          calls: [{ id: "c1", name: "inc", arguments: "{}" }],
+        },
+      ],
+      [{ type: "content", delta: "ok" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        {
+          name: "inc",
+          description: "increment",
+          parameters: Type.Object({ n: Type.Number({ default: 5 }) }),
+          execute: (args) => {
+            received = args;
+            return "ok";
+          },
+        },
+      ],
+    });
+
+    await runToCompletion(agent, [{ role: "user", content: "go" }]);
+
+    expect(received).toEqual({ n: 5 });
   });
 });

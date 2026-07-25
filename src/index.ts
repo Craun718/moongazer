@@ -12,6 +12,12 @@ export type { ChatTransport, TransportEvent, TransportRequest } from "./transpor
 export { createAgent, DEFAULT_MAX_STEPS } from "./agent";
 export type { Agent, AgentOptions, RunOptions } from "./agent";
 
+export { defineTool } from "./tool";
+
+// Re-export TypeBox's schema builder and type helper so callers can define
+// tools with a single import surface (`Type.Object`, `Type.String`, ...).
+export { Type, type Static } from "@sinclair/typebox";
+
 export { createEmitter } from "./emitter";
 export type { Emitter } from "./emitter";
 
