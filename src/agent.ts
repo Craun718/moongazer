@@ -84,6 +84,8 @@ export function createAgent(options: AgentOptions): Agent {
               if (event.type === "content") {
                 roundContent += event.delta;
                 emitter.emit({ type: "content", delta: event.delta });
+              } else if (event.type === "reasoning") {
+                emitter.emit({ type: "reasoning", delta: event.delta });
               } else if (event.type === "tool_calls") {
                 roundCalls = event.calls;
                 emitter.emit({ type: "tool_calls", calls: event.calls });

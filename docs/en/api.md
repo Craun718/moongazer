@@ -175,6 +175,7 @@ type TransportEvent =
     | { type: "content"; delta: string }
     | { type: "tool_calls"; calls: ToolCallPart[] }
     | { type: "finish"; reason: string };
+    | { type: "reasoning"; delta: string }
 ```
 
 | Type          | Description          |
@@ -182,6 +183,7 @@ type TransportEvent =
 | `content`     | Text delta           |
 | `tool_calls`  | Tool calls (reassembled) |
 | `finish`      | Stream finished      |
+| `reasoning`  | Reasoning text delta from the model (e.g. chain-of-thought) |
 
 ---
 
@@ -198,6 +200,7 @@ type AgentEvent =
     | { type: "done" }
     | { type: "error"; error: unknown }
     | { type: "abort" };
+    | { type: "reasoning"; delta: string }
 ```
 
 | Type              | Description                       |
@@ -209,6 +212,7 @@ type AgentEvent =
 | `done`            | Run completed normally            |
 | `error`           | Run encountered an error          |
 | `abort`           | Run was aborted                   |
+| `reasoning`  | Reasoning text delta from the model (e.g. chain-of-thought) |
 
 ---
 
@@ -333,6 +337,7 @@ interface OpenAIChoice {
 interface OpenAIDelta {
     content?: string | null;
     tool_calls?: OpenAIToolCallDelta[];
+    reasoning_content?: string | null;
 }
 
 interface OpenAIToolCallDelta {

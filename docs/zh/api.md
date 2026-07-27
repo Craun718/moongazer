@@ -175,6 +175,7 @@ type TransportEvent =
     | { type: "content"; delta: string }
     | { type: "tool_calls"; calls: ToolCallPart[] }
     | { type: "finish"; reason: string };
+    | { type: "reasoning"; delta: string }
 ```
 
 | 事件类型     | 描述                   |
@@ -182,6 +183,7 @@ type TransportEvent =
 | `content`    | 文本增量               |
 | `tool_calls` | 工具调用（已重组完成） |
 | `finish`     | 流结束及原因           |
+| `reasoning`  | 来自模型的推理文本增量（如思维链） |
 
 ---
 
@@ -198,6 +200,7 @@ type AgentEvent =
     | { type: "done" }
     | { type: "error"; error: unknown }
     | { type: "abort" };
+    | { type: "reasoning"; delta: string }
 ```
 
 | 事件类型          | 描述             |
@@ -209,6 +212,7 @@ type AgentEvent =
 | `done`            | 运行正常结束     |
 | `error`           | 运行出错         |
 | `abort`           | 运行被中止       |
+| `reasoning`  | 来自模型的推理文本增量（如思维链） |
 
 ---
 
@@ -333,6 +337,7 @@ interface OpenAIChoice {
 interface OpenAIDelta {
     content?: string | null;
     tool_calls?: OpenAIToolCallDelta[];
+    reasoning_content?: string | null;
 }
 
 interface OpenAIToolCallDelta {

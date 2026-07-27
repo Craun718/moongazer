@@ -13,6 +13,7 @@ export interface OpenAIToolCallDelta {
 export interface OpenAIDelta {
   content?: string | null;
   tool_calls?: OpenAIToolCallDelta[];
+  reasoning_content?: string | null;
 }
 
 export interface OpenAIChoice {
@@ -151,12 +152,17 @@ export function createOpenAITransport(raw: OpenAIRawStream): ChatTransport {
         ? { messages: wireMessages, tools: wireTools, tool_choice: "auto" }
         : { messages: wireMessages };
 
-      const acc = createAccumulator();
-      for await (const chunk of raw(request, signal)) {
-        accumulateChunk(acc, chunk);
-        const content = chunk.choices?.[0]?.delta?.content;
-        if (typeof content === "string" && content !== "") {
-          yield { type: "content", delta: content };
+     const acc = createAccumulator();
+     for await (const chunk of raw(request, signal)) {
+       accumulateChunk(acc, chunk);
+       const content = chunk.choices?.[0]?.delta?.content;
+       if (typeof content === "string" && content !== "") {
+         yield { type: "content", delta: content };
+        }
+
+        const reasoning = chunk.choices?.[0]?.delta?.reasoning_content;
+        if (typeof reasoning === "string" && reasoning !== "") {
+          yield { type: "reasoning", delta: reasoning };
         }
       }
 

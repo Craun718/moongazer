@@ -10,6 +10,7 @@ A lightweight, framework-agnostic TypeScript library for building LLM agent loop
 
 - **Provider-agnostic** — adapt any LLM provider via the `ChatTransport` interface
 - **Type-safe tools** — define tools with TypeBox schemas; the `execute` argument type is inferred from the schema, and the model's JSON is coerced/validated at runtime via `Value.Cast`
+- **Reasoning content** — streams `reasoning` deltas from models that emit `reasoning_content` (e.g. OpenAI o1/o3)
 - **Tool calls** — native function calling with automatic reassembly of streaming tool-call deltas
 - **Event-driven** — the agent runtime exposes `AgentEvent` via a subscriber pattern, making it easy to integrate with logging, storage, and UI
 - **Abort support** — safely abort an in-flight run while keeping content already received
@@ -65,6 +66,7 @@ const handle = agent.run({
 
 handle.subscribe((event) => {
   if (event.type === "content") console.log(event.delta);
+  if (event.type === "reasoning") console.log(event.delta);
 });
 ```
 

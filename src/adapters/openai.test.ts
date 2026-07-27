@@ -66,6 +66,42 @@ describe("createOpenAITransport", () => {
     const transport = createOpenAITransport(rawFrom([{ choices: [] } as unknown as OpenAIChatChunk]));
     const events: TransportEvent[] = [];
     for await (const e of transport.stream({ messages: [], tools: [], signal })) events.push(e);
-    expect(events).toEqual([]);
+      expect(events).toEqual([]);
+  });
+
+  it("emits reasoning deltas alongside content", async () => {
+    const transport = createOpenAITransport(
+      rawFrom([
+        chunk({ reasoning_content: "Let me think about", content: "" }),
+        chunk({ reasoning_content: " this step by step", content: "" }),
+        chunk({ reasoning_content: "", content: "Here is the answer." }),
+      ]),
+    );
+    const events: TransportEvent[] = [];
+    for await (const e of transport.stream({ messages: [], tools: [], signal })) events.push(e);
+
+    const reasoning = events
+      .filter((e): e is { type: "reasoning"; delta: string } => e.type === "reasoning")
+      .map((e) => e.delta)
+      .join("");
+    const content = events
+      .filter((e): e is { type: "content"; delta: string } => e.type === "content")
+      .map((e) => e.delta)
+      .join("");
+
+    expect(reasoning).toBe("Let me think about this step by step");
+    expect(content).toBe("Here is the answer.");
+  });
+
+  it("ignores empty reasoning_content", async () => {
+    const transport = createOpenAITransport(
+      rawFrom([
+        chunk({ reasoning_content: null, content: "Hello" }),
+      ]),
+    );
+    const events: TransportEvent[] = [];
+    for await (const e of transport.stream({ messages: [], tools: [], signal })) events.push(e);
+    const reasoning = events.filter((e) => e.type === "reasoning");
+    expect(reasoning).toEqual([]);
   });
 });

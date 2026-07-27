@@ -43,9 +43,10 @@ export type AgentEvent =
   | { type: "content"; delta: string }
   | { type: "tool_calls"; calls: ToolCallPart[] }
   | { type: "tool_result"; id: string; result: string }
-  | { type: "done" }
-  | { type: "error"; error: unknown }
-  | { type: "abort" };
+ | { type: "done" }
+ | { type: "error"; error: unknown }
+ | { type: "abort" };
+  | { type: "reasoning"; delta: string };
 
 export interface AgentRunHandle {
   /** Subscribe to agent events. Returns an unsubscribe function. */

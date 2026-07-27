@@ -5,6 +5,7 @@ export type TransportEvent =
   | { type: "content"; delta: string }
   | { type: "tool_calls"; calls: ToolCallPart[] }
   | { type: "finish"; reason: string };
+  | { type: "reasoning"; delta: string };
 
 export interface TransportRequest {
   messages: AgentMessage[];
