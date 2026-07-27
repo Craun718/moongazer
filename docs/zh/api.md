@@ -1,5 +1,19 @@
 # API 参考
 
+## 项目结构
+
+```
+src/
+├── index.ts              # 公开导出
+├── types.ts              # 领域类型（AgentTool、AgentMessage 等）
+├── tool.ts               # defineTool 辅助函数（TypeBox schema -> 带类型的工具）
+├── transport.ts          # ChatTransport 接口
+├── agent.ts              # 代理运行时（createAgent）
+├── emitter.ts            # 轻量级事件发射器
+└── adapters/
+    └── openai.ts         # OpenAI 流式适配器
+```
+
 ## 目录
 
 - [createAgent](#createagent)
@@ -178,11 +192,11 @@ type TransportEvent =
     | { type: "reasoning"; delta: string }
 ```
 
-| 事件类型     | 描述                   |
-| ------------ | ---------------------- |
-| `content`    | 文本增量               |
-| `tool_calls` | 工具调用（已重组完成） |
-| `finish`     | 流结束及原因           |
+| 事件类型     | 描述                               |
+| ------------ | ---------------------------------- |
+| `content`    | 文本增量                           |
+| `tool_calls` | 工具调用（已重组完成）             |
+| `finish`     | 流结束及原因                       |
 | `reasoning`  | 来自模型的推理文本增量（如思维链） |
 
 ---
@@ -203,16 +217,16 @@ type AgentEvent =
     | { type: "reasoning"; delta: string }
 ```
 
-| 事件类型          | 描述             |
-| ----------------- | ---------------- |
-| `assistant_start` | 助手开始响应     |
-| `content`         | 文本增量         |
-| `tool_calls`      | 模型请求工具调用 |
-| `tool_result`     | 工具执行完成     |
-| `done`            | 运行正常结束     |
-| `error`           | 运行出错         |
-| `abort`           | 运行被中止       |
-| `reasoning`  | 来自模型的推理文本增量（如思维链） |
+| 事件类型          | 描述                               |
+| ----------------- | ---------------------------------- |
+| `assistant_start` | 助手开始响应                       |
+| `content`         | 文本增量                           |
+| `tool_calls`      | 模型请求工具调用                   |
+| `tool_result`     | 工具执行完成                       |
+| `done`            | 运行正常结束                       |
+| `error`           | 运行出错                           |
+| `abort`           | 运行被中止                         |
+| `reasoning`       | 来自模型的推理文本增量（如思维链） |
 
 ---
 
@@ -380,6 +394,6 @@ interface OpenAIWireFunctionCall {
 
 `Type` 与 `Static` 从 `@sinclair/typebox` 重新导出，调用者用单一导入即可构建 schema。
 
-| 名称                | 值  | 描述                              |
-| ------------------- | --- | --------------------------------- |
-| `DEFAULT_MAX_STEPS` | `6` | `createAgent` 的默认最大工具轮次  |
+| 名称                | 值  | 描述                             |
+| ------------------- | --- | -------------------------------- |
+| `DEFAULT_MAX_STEPS` | `6` | `createAgent` 的默认最大工具轮次 |

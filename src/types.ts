@@ -45,7 +45,7 @@ export type AgentEvent =
   | { type: "tool_result"; id: string; result: string }
  | { type: "done" }
  | { type: "error"; error: unknown }
- | { type: "abort" };
+ | { type: "abort" }
   | { type: "reasoning"; delta: string };
 
 export interface AgentRunHandle {

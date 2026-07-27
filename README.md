@@ -2,6 +2,8 @@
 
 A lightweight, framework-agnostic TypeScript library for building LLM agent loops with tool-use support.
 
+English | [Chinese](./README.zh.md)
+
 ## Overview
 
 **moongazer** abstracts LLM streaming completions behind a `ChatTransport` interface, then provides an event-driven agent runtime on top. It does not tie to any specific model provider — you can use the built-in OpenAI adapter or write a custom adapter for any other provider.
@@ -22,37 +24,46 @@ A lightweight, framework-agnostic TypeScript library for building LLM agent loop
 pnpm add moongazer
 ```
 
+## API Documentation
+
+[API Documentation](./docs/en/api.md)
+
 ## Quick Start
 
 ```typescript
-import { createAgent, createOpenAITransport, defineTool, Type } from "moongazer";
+import {
+    createAgent,
+    createOpenAITransport,
+    defineTool,
+    Type,
+} from "moongazer";
 import type { OpenAIRawStream } from "moongazer";
 
 // 1. Define a tool
 const getWeather = defineTool({
-  name: "get_weather",
-  description: "Get weather for a city",
-  parameters: Type.Object({
-    city: Type.String(),
-  }),
-  execute: async ({ city }) => {
-    return `Weather in ${city}: sunny, 22°C`;
-  },
+    name: "get_weather",
+    description: "Get weather for a city",
+    parameters: Type.Object({
+        city: Type.String(),
+    }),
+    execute: async ({ city }) => {
+        return `Weather in ${city}: sunny, 22°C`;
+    },
 });
 
 // 2. Create OpenAI transport
 const rawStream: OpenAIRawStream = async function* (request, signal) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
-    signal,
-  });
-  const reader = response.body!.getReader();
-  // ... parse SSE chunks and yield OpenAIChatChunk objects
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
+        signal,
+    });
+    const reader = response.body!.getReader();
+    // ... parse SSE chunks and yield OpenAIChatChunk objects
 };
 
 const transport = createOpenAITransport(rawStream);
@@ -61,28 +72,20 @@ const transport = createOpenAITransport(rawStream);
 const agent = createAgent({ transport, tools: [getWeather] });
 
 const handle = agent.run({
-  messages: [{ role: "user", content: "What is the weather in Beijing today?" }],
+    messages: [
+        { role: "user", content: "What is the weather in Beijing today?" },
+    ],
 });
 
 handle.subscribe((event) => {
-  if (event.type === "content") console.log(event.delta);
-  if (event.type === "reasoning") console.log(event.delta);
+    if (event.type === "content") console.log(event.delta);
+    if (event.type === "reasoning") console.log(event.delta);
 });
 ```
 
-## Project Structure
+## Demo Project
 
-```
-src/
-├── index.ts              # Public exports
-├── types.ts              # Domain types (AgentTool, AgentMessage, ...)
-├── tool.ts               # defineTool helper (TypeBox schema -> typed tool)
-├── transport.ts          # ChatTransport interface
-├── agent.ts              # Agent runtime (createAgent)
-├── emitter.ts            # Lightweight emitter
-└── adapters/
-    └── openai.ts         # OpenAI streaming adapter
-```
+[Demo](https://github.com/Craun718/WebAgentDemo)
 
 ## License
 

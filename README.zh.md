@@ -2,6 +2,8 @@
 
 轻量级、框架无关的 TypeScript 库，用于构建带工具调用 (tool-use) 能力的 LLM 代理循环。
 
+[English](./README.md) | Chinese
+
 ## 概述
 
 **moongazer** 将 LLM 流式补全抽象为 `ChatTransport` 接口，并在此基础上提供事件驱动的代理运行时。它不绑定任何具体模型提供商——你可以直接使用内置的 OpenAI 适配器，或为其他提供商编写自定义适配器。
@@ -21,6 +23,10 @@
 ```bash
 pnpm add moongazer
 ```
+
+## API 文档
+
+[API 文档](./docs/zh/api.md)
 
 ## 快速开始
 
@@ -75,19 +81,9 @@ handle.subscribe((event) => {
 });
 ```
 
-## 项目结构
+## 示例项目
 
-```
-src/
-├── index.ts              # 公开导出
-├── types.ts              # 领域类型（AgentTool、AgentMessage 等）
-├── tool.ts               # defineTool 辅助函数（TypeBox schema -> 带类型的工具）
-├── transport.ts          # ChatTransport 接口
-├── agent.ts              # 代理运行时（createAgent）
-├── emitter.ts            # 轻量级事件发射器
-└── adapters/
-    └── openai.ts         # OpenAI 流式适配器
-```
+[Demo](https://github.com/Craun718/WebAgentDemo)
 
 ## 许可
 

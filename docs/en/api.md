@@ -1,5 +1,19 @@
 # API Reference
 
+## Project Structure
+
+```
+src/
+├── index.ts              # Public exports
+├── types.ts              # Domain types (AgentTool, AgentMessage, ...)
+├── tool.ts               # defineTool helper (TypeBox schema -> typed tool)
+├── transport.ts          # ChatTransport interface
+├── agent.ts              # Agent runtime (createAgent)
+├── emitter.ts            # Lightweight emitter
+└── adapters/
+    └── openai.ts         # OpenAI streaming adapter
+```
+
 ## Table of Contents
 
 - [createAgent](#createagent)

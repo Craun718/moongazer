@@ -4,8 +4,8 @@ import type { AgentMessage, AgentTool, ToolCallPart } from "./types";
 export type TransportEvent =
   | { type: "content"; delta: string }
   | { type: "tool_calls"; calls: ToolCallPart[] }
+  | { type: "reasoning"; delta: string }
   | { type: "finish"; reason: string };
-  | { type: "reasoning"; delta: string };
 
 export interface TransportRequest {
   messages: AgentMessage[];
