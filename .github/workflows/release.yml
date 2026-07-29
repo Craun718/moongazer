@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump type
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck & Test
+        run: pnpm typecheck && pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Calculate new version
+        id: version
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          IFS='.' read -r MAJ MIN PAT <<< "$CURRENT"
+          case "${{ inputs.bump }}" in
+            major) NEW="$((MAJ + 1)).0.0" ;;
+            minor) NEW="${MAJ}.$((MIN + 1)).0" ;;
+            patch) NEW="${MAJ}.${MIN}.$((PAT + 1))" ;;
+          esac
+          TAG="moongazer@${NEW}"
+          echo "current=$CURRENT"  >> $GITHUB_OUTPUT
+          echo "new=$NEW"          >> $GITHUB_OUTPUT
+          echo "tag=$TAG"          >> $GITHUB_OUTPUT
+
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: moongazer v${{ steps.version.outputs.new }}
+          body: |
+            ## moongazer v${{ steps.version.outputs.new }}
+
+            To publish this version to npm, push the tag:
+
+            ```bash
+            git push origin ${{ steps.version.outputs.tag }}
+            ```
+          draft: true
+          generate_release_notes: true
+          files: dist/*
