@@ -31,39 +31,34 @@ pnpm add moongazer
 ## 快速开始
 
 ```typescript
-import {
-    createAgent,
-    createOpenAITransport,
-    defineTool,
-    Type,
-} from "moongazer";
+import { createAgent, createOpenAITransport, defineTool, Type } from "moongazer";
 import type { OpenAIRawStream } from "moongazer";
 
 // 1. 定义一个工具
 const getWeather = defineTool({
-    name: "get_weather",
-    description: "获取指定城市的天气",
-    parameters: Type.Object({
-        city: Type.String(),
-    }),
-    execute: async ({ city }) => {
-        return `Weather in ${city}: sunny, 22°C`;
-    },
+  name: "get_weather",
+  description: "获取指定城市的天气",
+  parameters: Type.Object({
+    city: Type.String(),
+  }),
+  execute: async ({ city }) => {
+    return `Weather in ${city}: sunny, 22°C`;
+  },
 });
 
 // 2. 创建 OpenAI 传输层
 const rawStream: OpenAIRawStream = async function* (request, signal) {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
-        signal,
-    });
-    const reader = response.body!.getReader();
-    // ... 解析 SSE 分片并 yield OpenAIChatChunk 对象
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
+    signal,
+  });
+  const reader = response.body!.getReader();
+  // ... 解析 SSE 分片并 yield OpenAIChatChunk 对象
 };
 
 const transport = createOpenAITransport(rawStream);
@@ -72,12 +67,12 @@ const transport = createOpenAITransport(rawStream);
 const agent = createAgent({ transport, tools: [getWeather] });
 
 const handle = agent.run({
-    messages: [{ role: "user", content: "北京今天天气怎么样？" }],
+  messages: [{ role: "user", content: "北京今天天气怎么样？" }],
 });
 
 handle.subscribe((event) => {
-    if (event.type === "content") console.log(event.delta);
-    if (event.type === "reasoning") console.log(event.delta);
+  if (event.type === "content") console.log(event.delta);
+  if (event.type === "reasoning") console.log(event.delta);
 });
 ```
 

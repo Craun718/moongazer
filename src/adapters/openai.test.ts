@@ -24,7 +24,9 @@ const signal = new AbortController().signal;
 
 describe("createOpenAITransport", () => {
   it("emits content deltas in arrival order", async () => {
-    const transport = createOpenAITransport(rawFrom([chunk({ content: "Hel" }), chunk({ content: "lo" })]));
+    const transport = createOpenAITransport(
+      rawFrom([chunk({ content: "Hel" }), chunk({ content: "lo" })]),
+    );
     const events: TransportEvent[] = [];
     for await (const e of transport.stream({ messages: [], tools: [], signal })) events.push(e);
     const text = events.map((e) => (e.type === "content" ? e.delta : "")).join("");
@@ -34,7 +36,9 @@ describe("createOpenAITransport", () => {
   it("reassembles a tool call whose arguments arrive in fragments", async () => {
     const transport = createOpenAITransport(
       rawFrom([
-        chunk({ tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name: "get" } }] }),
+        chunk({
+          tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name: "get" } }],
+        }),
         chunk({ tool_calls: [{ index: 0, function: { arguments: '{"city":' } }] }),
         chunk({ tool_calls: [{ index: 0, function: { arguments: ' "Paris"}' } }] }, "tool_calls"),
       ]),
@@ -63,10 +67,12 @@ describe("createOpenAITransport", () => {
   });
 
   it("ignores chunks without choices", async () => {
-    const transport = createOpenAITransport(rawFrom([{ choices: [] } as unknown as OpenAIChatChunk]));
+    const transport = createOpenAITransport(
+      rawFrom([{ choices: [] } as unknown as OpenAIChatChunk]),
+    );
     const events: TransportEvent[] = [];
     for await (const e of transport.stream({ messages: [], tools: [], signal })) events.push(e);
-      expect(events).toEqual([]);
+    expect(events).toEqual([]);
   });
 
   it("emits reasoning deltas alongside content", async () => {
@@ -95,9 +101,7 @@ describe("createOpenAITransport", () => {
 
   it("ignores empty reasoning_content", async () => {
     const transport = createOpenAITransport(
-      rawFrom([
-        chunk({ reasoning_content: null, content: "Hello" }),
-      ]),
+      rawFrom([chunk({ reasoning_content: null, content: "Hello" })]),
     );
     const events: TransportEvent[] = [];
     for await (const e of transport.stream({ messages: [], tools: [], signal })) events.push(e);

@@ -40,45 +40,45 @@ function createAgent(options: AgentOptions): Agent;
 
 ### AgentOptions
 
-| Property       | Type            | Default     | Description                          |
-| -------------- | --------------- | ----------- | ------------------------------------ |
-| `transport`    | `ChatTransport` | — (required) | Streaming chat transport            |
-| `tools`        | `AgentTool[]`   | `[]`        | Initial tool list                    |
-| `maxSteps`     | `number`        | `6`         | Max tool round-trips                 |
+| Property    | Type            | Default      | Description              |
+| ----------- | --------------- | ------------ | ------------------------ |
+| `transport` | `ChatTransport` | — (required) | Streaming chat transport |
+| `tools`     | `AgentTool[]`   | `[]`         | Initial tool list        |
+| `maxSteps`  | `number`        | `6`          | Max tool round-trips     |
 
 ### Agent
 
 ```typescript
 interface Agent {
-    /** Register a tool */
-    registerTool(tool: AgentTool): void;
-    /** Run the agent */
-    run(options: RunOptions): AgentRunHandle;
+  /** Register a tool */
+  registerTool(tool: AgentTool): void;
+  /** Run the agent */
+  run(options: RunOptions): AgentRunHandle;
 }
 ```
 
 #### RunOptions
 
-| Property    | Type             | Default     | Description                          |
-| ----------- | ---------------- | ----------- | ------------------------------------ |
-| `messages`  | `AgentMessage[]` | — (required) | Conversation history (not mutated) |
-| `signal`    | `AbortSignal`    | —           | External abort signal                |
+| Property   | Type             | Default      | Description                        |
+| ---------- | ---------------- | ------------ | ---------------------------------- |
+| `messages` | `AgentMessage[]` | — (required) | Conversation history (not mutated) |
+| `signal`   | `AbortSignal`    | —            | External abort signal              |
 
 #### Example
 
 ```typescript
 const agent = createAgent({
-    transport: myTransport,
-    tools: [myTool],
-    maxSteps: 4,
+  transport: myTransport,
+  tools: [myTool],
+  maxSteps: 4,
 });
 
 const handle = agent.run({
-    messages: [{ role: "user", content: "Hello!" }],
+  messages: [{ role: "user", content: "Hello!" }],
 });
 
 handle.subscribe((event) => {
-    if (event.type === "content") process.stdout.write(event.delta);
+  if (event.type === "content") process.stdout.write(event.delta);
 });
 ```
 
@@ -96,8 +96,8 @@ function createOpenAITransport(raw: OpenAIRawStream): ChatTransport;
 
 ```typescript
 type OpenAIRawStream = (
-    request: OpenAIRawRequest,
-    signal: AbortSignal,
+  request: OpenAIRawRequest,
+  signal: AbortSignal,
 ) => AsyncIterable<OpenAIChatChunk>;
 ```
 
@@ -107,9 +107,9 @@ The application owns the URL, auth, and transport mechanism (e.g. SSE); it only 
 
 ```typescript
 interface OpenAIRawRequest {
-    messages: OpenAIWireMessage[];
-    tools?: OpenAIWireTool[];
-    tool_choice?: "auto" | "none" | "required";
+  messages: OpenAIWireMessage[];
+  tools?: OpenAIWireTool[];
+  tool_choice?: "auto" | "none" | "required";
 }
 ```
 
@@ -117,24 +117,24 @@ interface OpenAIRawRequest {
 
 ```typescript
 const rawStream: OpenAIRawStream = async function* (request, signal) {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
-        signal,
-    });
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        // ... parse SSE "data: ..." lines and yield OpenAIChatChunk
-    }
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
+    signal,
+  });
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    // ... parse SSE "data: ..." lines and yield OpenAIChatChunk
+  }
 };
 
 const transport = createOpenAITransport(rawStream);
@@ -154,9 +154,9 @@ function createEmitter<T>(): Emitter<T>;
 
 ```typescript
 interface Emitter<T> {
-    subscribe(listener: (value: T) => void): () => void;
-    emit(value: T): void;
-    close(): void;
+  subscribe(listener: (value: T) => void): () => void;
+  emit(value: T): void;
+  close(): void;
 }
 ```
 
@@ -168,7 +168,7 @@ Provider-agnostic streaming transport. The agent loop depends only on this inter
 
 ```typescript
 interface ChatTransport {
-    stream(request: TransportRequest): AsyncIterable<TransportEvent>;
+  stream(request: TransportRequest): AsyncIterable<TransportEvent>;
 }
 ```
 
@@ -176,9 +176,9 @@ interface ChatTransport {
 
 ```typescript
 interface TransportRequest {
-    messages: AgentMessage[];
-    tools: AgentTool[];
-    signal: AbortSignal;
+  messages: AgentMessage[];
+  tools: AgentTool[];
+  signal: AbortSignal;
 }
 ```
 
@@ -192,11 +192,11 @@ type TransportEvent =
     | { type: "reasoning"; delta: string }
 ```
 
-| Type          | Description          |
-| ------------- | -------------------- |
-| `content`     | Text delta           |
-| `tool_calls`  | Tool calls (reassembled) |
-| `finish`      | Stream finished      |
+| Type         | Description                                                 |
+| ------------ | ----------------------------------------------------------- |
+| `content`    | Text delta                                                  |
+| `tool_calls` | Tool calls (reassembled)                                    |
+| `finish`     | Stream finished                                             |
 | `reasoning`  | Reasoning text delta from the model (e.g. chain-of-thought) |
 
 ---
@@ -217,16 +217,16 @@ type AgentEvent =
     | { type: "reasoning"; delta: string }
 ```
 
-| Type              | Description                       |
-| ----------------- | --------------------------------- |
-| `assistant_start` | Assistant started responding      |
-| `content`         | Text delta                        |
-| `tool_calls`      | Model requested tool calls        |
-| `tool_result`     | Tool execution completed          |
-| `done`            | Run completed normally            |
-| `error`           | Run encountered an error          |
-| `abort`           | Run was aborted                   |
-| `reasoning`  | Reasoning text delta from the model (e.g. chain-of-thought) |
+| Type              | Description                                                 |
+| ----------------- | ----------------------------------------------------------- |
+| `assistant_start` | Assistant started responding                                |
+| `content`         | Text delta                                                  |
+| `tool_calls`      | Model requested tool calls                                  |
+| `tool_result`     | Tool execution completed                                    |
+| `done`            | Run completed normally                                      |
+| `error`           | Run encountered an error                                    |
+| `abort`           | Run was aborted                                             |
+| `reasoning`       | Reasoning text delta from the model (e.g. chain-of-thought) |
 
 ---
 
@@ -236,10 +236,10 @@ Provider-agnostic representation of a conversation message.
 
 ```typescript
 interface AgentMessage {
-    role: AgentRole;
-    content: string | null;
-    toolCalls?: ToolCallPart[];
-    toolCallId?: string;
+  role: AgentRole;
+  content: string | null;
+  toolCalls?: ToolCallPart[];
+  toolCallId?: string;
 }
 ```
 
@@ -253,10 +253,10 @@ type AgentRole = "system" | "user" | "assistant" | "tool";
 
 ```typescript
 interface ToolCallPart {
-    id: string;
-    name: string;
-    /** Raw JSON arguments string from the model */
-    arguments: string;
+  id: string;
+  name: string;
+  /** Raw JSON arguments string from the model */
+  arguments: string;
 }
 ```
 
@@ -270,11 +270,11 @@ Tool definition. `parameters` is a [TypeBox](https://www.npmjs.com/package/@sinc
 import { Type, type Static } from "moongazer";
 
 interface AgentTool<T extends TObject = TObject> {
-    name: string;
-    description: string;
-    /** TypeBox object schema; serialized as JSON Schema for the model */
-    parameters: T;
-    execute: (args: Static<T>) => Promise<unknown> | unknown;
+  name: string;
+  description: string;
+  /** TypeBox object schema; serialized as JSON Schema for the model */
+  parameters: T;
+  execute: (args: Static<T>) => Promise<unknown> | unknown;
 }
 ```
 
@@ -286,10 +286,10 @@ Inferred-type helper and the recommended way to build a tool. `T` is inferred fr
 
 ```typescript
 function defineTool<T extends TObject>(opts: {
-    name: string;
-    description: string;
-    parameters: T;
-    execute: (args: Static<T>) => Promise<unknown> | unknown;
+  name: string;
+  description: string;
+  parameters: T;
+  execute: (args: Static<T>) => Promise<unknown> | unknown;
 }): AgentTool<T>;
 ```
 
@@ -299,15 +299,15 @@ function defineTool<T extends TObject>(opts: {
 import { defineTool, Type } from "moongazer";
 
 const searchTool = defineTool({
-    name: "web_search",
-    description: "Search the internet",
-    parameters: Type.Object({
-        query: Type.String({ description: "Search query" }),
-    }),
-    execute: async ({ query }) => {
-        // `query` is typed as `string`
-        return `Results for "${query}" ...`;
-    },
+  name: "web_search",
+  description: "Search the internet",
+  parameters: Type.Object({
+    query: Type.String({ description: "Search query" }),
+  }),
+  execute: async ({ query }) => {
+    // `query` is typed as `string`
+    return `Results for "${query}" ...`;
+  },
 });
 ```
 
@@ -319,15 +319,15 @@ Controls a running agent.
 
 ```typescript
 interface AgentRunHandle {
-    subscribe(listener: (event: AgentEvent) => void): () => void;
-    stop(): void;
+  subscribe(listener: (event: AgentEvent) => void): () => void;
+  stop(): void;
 }
 ```
 
-| Method      | Description                       |
-| ----------- | --------------------------------- |
+| Method      | Description                                                |
+| ----------- | ---------------------------------------------------------- |
 | `subscribe` | Subscribe to agent events; returns an unsubscribe function |
-| `stop`      | Abort the run, keeping partial content received |
+| `stop`      | Abort the run, keeping partial content received            |
 
 ---
 
@@ -339,26 +339,26 @@ These types describe the wire format for interacting with OpenAI-compatible APIs
 
 ```typescript
 interface OpenAIChatChunk {
-    choices?: OpenAIChoice[];
+  choices?: OpenAIChoice[];
 }
 
 interface OpenAIChoice {
-    index: number;
-    delta?: OpenAIDelta;
-    finish_reason?: string | null;
+  index: number;
+  delta?: OpenAIDelta;
+  finish_reason?: string | null;
 }
 
 interface OpenAIDelta {
-    content?: string | null;
-    tool_calls?: OpenAIToolCallDelta[];
-    reasoning_content?: string | null;
+  content?: string | null;
+  tool_calls?: OpenAIToolCallDelta[];
+  reasoning_content?: string | null;
 }
 
 interface OpenAIToolCallDelta {
-    index: number;
-    id?: string;
-    type?: "function";
-    function?: { name?: string; arguments?: string };
+  index: number;
+  id?: string;
+  type?: "function";
+  function?: { name?: string; arguments?: string };
 }
 ```
 
@@ -366,25 +366,25 @@ interface OpenAIToolCallDelta {
 
 ```typescript
 interface OpenAIWireMessage {
-    role: string;
-    content?: string | null;
-    tool_calls?: OpenAIWireFunctionCall[];
-    tool_call_id?: string;
+  role: string;
+  content?: string | null;
+  tool_calls?: OpenAIWireFunctionCall[];
+  tool_call_id?: string;
 }
 
 interface OpenAIWireTool {
-    type: "function";
-    function: {
-        name: string;
-        description: string;
-        parameters: Record<string, unknown>;
-    };
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 interface OpenAIWireFunctionCall {
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
 }
 ```
 
@@ -394,6 +394,6 @@ interface OpenAIWireFunctionCall {
 
 `Type` and `Static` are re-exported from `@sinclair/typebox` so callers can build schemas with a single import surface.
 
-| Name                | Value | Description                          |
-| ------------------- | ----- | ------------------------------------ |
+| Name                | Value | Description                               |
+| ------------------- | ----- | ----------------------------------------- |
 | `DEFAULT_MAX_STEPS` | `6`   | Default max tool rounds for `createAgent` |

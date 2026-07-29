@@ -54,7 +54,12 @@ describe("createAgent", () => {
     const agent = createAgent({
       transport,
       tools: [
-        { name: "get_current_time", description: "time", parameters: Type.Object({}), execute: () => "11:37" },
+        {
+          name: "get_current_time",
+          description: "time",
+          parameters: Type.Object({}),
+          execute: () => "11:37",
+        },
       ],
     });
 
@@ -83,10 +88,10 @@ describe("createAgent", () => {
       { type: "tool_calls", calls: [{ id: "x", name: "f", arguments: "{}" }] },
     ];
     const transport = scriptedTransport([loop, loop, loop, loop]);
-   const agent = createAgent({
-     transport,
-     tools: [{ name: "f", description: "", parameters: Type.Object({}), execute: () => "r" }],
-     maxSteps: 2,
+    const agent = createAgent({
+      transport,
+      tools: [{ name: "f", description: "", parameters: Type.Object({}), execute: () => "r" }],
+      maxSteps: 2,
     });
 
     const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
@@ -154,7 +159,9 @@ describe("createAgent", () => {
     const events = await runToCompletion(agent, [{ role: "user", content: "paris weather" }]);
 
     expect(received).toEqual({ city: "Paris" });
-    const result = events.find((e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result");
+    const result = events.find(
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result",
+    );
     expect(result?.result).toBe("sunny");
   });
 

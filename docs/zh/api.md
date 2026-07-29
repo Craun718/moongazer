@@ -50,10 +50,10 @@ function createAgent(options: AgentOptions): Agent;
 
 ```typescript
 interface Agent {
-    /** 注册一个工具 */
-    registerTool(tool: AgentTool): void;
-    /** 运行代理 */
-    run(options: RunOptions): AgentRunHandle;
+  /** 注册一个工具 */
+  registerTool(tool: AgentTool): void;
+  /** 运行代理 */
+  run(options: RunOptions): AgentRunHandle;
 }
 ```
 
@@ -68,17 +68,17 @@ interface Agent {
 
 ```typescript
 const agent = createAgent({
-    transport: myTransport,
-    tools: [myTool],
-    maxSteps: 4,
+  transport: myTransport,
+  tools: [myTool],
+  maxSteps: 4,
 });
 
 const handle = agent.run({
-    messages: [{ role: "user", content: "Hello!" }],
+  messages: [{ role: "user", content: "Hello!" }],
 });
 
 handle.subscribe((event) => {
-    if (event.type === "content") process.stdout.write(event.delta);
+  if (event.type === "content") process.stdout.write(event.delta);
 });
 ```
 
@@ -96,8 +96,8 @@ function createOpenAITransport(raw: OpenAIRawStream): ChatTransport;
 
 ```typescript
 type OpenAIRawStream = (
-    request: OpenAIRawRequest,
-    signal: AbortSignal,
+  request: OpenAIRawRequest,
+  signal: AbortSignal,
 ) => AsyncIterable<OpenAIChatChunk>;
 ```
 
@@ -107,9 +107,9 @@ type OpenAIRawStream = (
 
 ```typescript
 interface OpenAIRawRequest {
-    messages: OpenAIWireMessage[];
-    tools?: OpenAIWireTool[];
-    tool_choice?: "auto" | "none" | "required";
+  messages: OpenAIWireMessage[];
+  tools?: OpenAIWireTool[];
+  tool_choice?: "auto" | "none" | "required";
 }
 ```
 
@@ -117,24 +117,24 @@ interface OpenAIRawRequest {
 
 ```typescript
 const rawStream: OpenAIRawStream = async function* (request, signal) {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
-        signal,
-    });
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        // ... 解析 SSE "data: ..." 行并 yield OpenAIChatChunk
-    }
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({ ...request, model: "gpt-4o", stream: true }),
+    signal,
+  });
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    // ... 解析 SSE "data: ..." 行并 yield OpenAIChatChunk
+  }
 };
 
 const transport = createOpenAITransport(rawStream);
@@ -154,9 +154,9 @@ function createEmitter<T>(): Emitter<T>;
 
 ```typescript
 interface Emitter<T> {
-    subscribe(listener: (value: T) => void): () => void;
-    emit(value: T): void;
-    close(): void;
+  subscribe(listener: (value: T) => void): () => void;
+  emit(value: T): void;
+  close(): void;
 }
 ```
 
@@ -168,7 +168,7 @@ interface Emitter<T> {
 
 ```typescript
 interface ChatTransport {
-    stream(request: TransportRequest): AsyncIterable<TransportEvent>;
+  stream(request: TransportRequest): AsyncIterable<TransportEvent>;
 }
 ```
 
@@ -176,9 +176,9 @@ interface ChatTransport {
 
 ```typescript
 interface TransportRequest {
-    messages: AgentMessage[];
-    tools: AgentTool[];
-    signal: AbortSignal;
+  messages: AgentMessage[];
+  tools: AgentTool[];
+  signal: AbortSignal;
 }
 ```
 
@@ -236,10 +236,10 @@ type AgentEvent =
 
 ```typescript
 interface AgentMessage {
-    role: AgentRole;
-    content: string | null;
-    toolCalls?: ToolCallPart[];
-    toolCallId?: string;
+  role: AgentRole;
+  content: string | null;
+  toolCalls?: ToolCallPart[];
+  toolCallId?: string;
 }
 ```
 
@@ -253,10 +253,10 @@ type AgentRole = "system" | "user" | "assistant" | "tool";
 
 ```typescript
 interface ToolCallPart {
-    id: string;
-    name: string;
-    /** 模型发出的原始 JSON 参数字符串 */
-    arguments: string;
+  id: string;
+  name: string;
+  /** 模型发出的原始 JSON 参数字符串 */
+  arguments: string;
 }
 ```
 
@@ -270,11 +270,11 @@ interface ToolCallPart {
 import { Type, type Static } from "moongazer";
 
 interface AgentTool<T extends TObject = TObject> {
-    name: string;
-    description: string;
-    /** TypeBox 对象 schema；序列化为 JSON Schema 发给模型 */
-    parameters: T;
-    execute: (args: Static<T>) => Promise<unknown> | unknown;
+  name: string;
+  description: string;
+  /** TypeBox 对象 schema；序列化为 JSON Schema 发给模型 */
+  parameters: T;
+  execute: (args: Static<T>) => Promise<unknown> | unknown;
 }
 ```
 
@@ -286,10 +286,10 @@ interface AgentTool<T extends TObject = TObject> {
 
 ```typescript
 function defineTool<T extends TObject>(opts: {
-    name: string;
-    description: string;
-    parameters: T;
-    execute: (args: Static<T>) => Promise<unknown> | unknown;
+  name: string;
+  description: string;
+  parameters: T;
+  execute: (args: Static<T>) => Promise<unknown> | unknown;
 }): AgentTool<T>;
 ```
 
@@ -299,15 +299,15 @@ function defineTool<T extends TObject>(opts: {
 import { defineTool, Type } from "moongazer";
 
 const searchTool = defineTool({
-    name: "web_search",
-    description: "搜索互联网",
-    parameters: Type.Object({
-        query: Type.String({ description: "搜索关键词" }),
-    }),
-    execute: async ({ query }) => {
-        // `query` 类型为 `string`
-        return `Results for "${query}" ...`;
-    },
+  name: "web_search",
+  description: "搜索互联网",
+  parameters: Type.Object({
+    query: Type.String({ description: "搜索关键词" }),
+  }),
+  execute: async ({ query }) => {
+    // `query` 类型为 `string`
+    return `Results for "${query}" ...`;
+  },
 });
 ```
 
@@ -319,8 +319,8 @@ const searchTool = defineTool({
 
 ```typescript
 interface AgentRunHandle {
-    subscribe(listener: (event: AgentEvent) => void): () => void;
-    stop(): void;
+  subscribe(listener: (event: AgentEvent) => void): () => void;
+  stop(): void;
 }
 ```
 
@@ -339,26 +339,26 @@ interface AgentRunHandle {
 
 ```typescript
 interface OpenAIChatChunk {
-    choices?: OpenAIChoice[];
+  choices?: OpenAIChoice[];
 }
 
 interface OpenAIChoice {
-    index: number;
-    delta?: OpenAIDelta;
-    finish_reason?: string | null;
+  index: number;
+  delta?: OpenAIDelta;
+  finish_reason?: string | null;
 }
 
 interface OpenAIDelta {
-    content?: string | null;
-    tool_calls?: OpenAIToolCallDelta[];
-    reasoning_content?: string | null;
+  content?: string | null;
+  tool_calls?: OpenAIToolCallDelta[];
+  reasoning_content?: string | null;
 }
 
 interface OpenAIToolCallDelta {
-    index: number;
-    id?: string;
-    type?: "function";
-    function?: { name?: string; arguments?: string };
+  index: number;
+  id?: string;
+  type?: "function";
+  function?: { name?: string; arguments?: string };
 }
 ```
 
@@ -366,25 +366,25 @@ interface OpenAIToolCallDelta {
 
 ```typescript
 interface OpenAIWireMessage {
-    role: string;
-    content?: string | null;
-    tool_calls?: OpenAIWireFunctionCall[];
-    tool_call_id?: string;
+  role: string;
+  content?: string | null;
+  tool_calls?: OpenAIWireFunctionCall[];
+  tool_call_id?: string;
 }
 
 interface OpenAIWireTool {
-    type: "function";
-    function: {
-        name: string;
-        description: string;
-        parameters: Record<string, unknown>;
-    };
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 interface OpenAIWireFunctionCall {
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
 }
 ```
 
