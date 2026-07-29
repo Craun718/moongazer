@@ -1,9 +1,14 @@
 {
   "name": "moongazer",
   "version": "0.1.0",
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
   "type": "module",
   "sideEffects": false,
-  "packageManager": "pnpm@11.13.1+sha512.b2fc7683b8a6525414e7d13e1ba28caaddde96bf66ec540bfaeb7e702b81f3e0be4d1f295edf7f9fe0396740a8dce4509c582ddf79891f4543fea32d37645f25",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,12 +19,6 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "README.zh.md",
-    "LICENSE"
-  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -42,5 +41,6 @@
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.10"
-  }
+  },
+  "packageManager": "pnpm@11.13.1+sha512.b2fc7683b8a6525414e7d13e1ba28caaddde96bf66ec540bfaeb7e702b81f3e0be4d1f295edf7f9fe0396740a8dce4509c582ddf79891f4543fea32d37645f25"
 }
