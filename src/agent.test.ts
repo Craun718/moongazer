@@ -318,7 +318,12 @@ describe("createAgent", () => {
     const agent = createAgent({
       transport,
       tools: [
-        { name: "f", description: "", parameters: Type.Object({ n: Type.Number() }), execute: () => "ok" },
+        {
+          name: "f",
+          description: "",
+          parameters: Type.Object({ n: Type.Number() }),
+          execute: () => "ok",
+        },
       ],
     });
 
@@ -343,7 +348,12 @@ describe("createAgent", () => {
     const agent = createAgent({
       transport,
       tools: [
-        { name: "f", description: "", parameters: Type.Object({ n: Type.Number() }), execute: () => "ok" },
+        {
+          name: "f",
+          description: "",
+          parameters: Type.Object({ n: Type.Number() }),
+          execute: () => "ok",
+        },
       ],
     });
 
