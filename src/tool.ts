@@ -7,8 +7,9 @@ import type { AgentTool } from "./types";
  * The parameter type `T` is inferred from `parameters`, so `execute`'s input
  * type and the JSON Schema sent to the model stay in sync at compile time:
  * the schema and the handler can no longer drift apart. The agent loop also
- * runs `Value.Cast` over the model's JSON before invoking `execute`, so
- * defaults and basic type coercion are applied at runtime.
+ * runs `Value.Default` (to fill schema `default` values) and then
+ * `Value.Assert` over the model's JSON before invoking `execute`, so invalid
+ * arguments are surfaced as an `error` event instead of being silently coerced.
  *
  * `defineTool` is the recommended constructor; `AgentTool` can still be used
  * directly when callers want to specify `T` explicitly.

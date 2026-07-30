@@ -11,7 +11,7 @@
 ### 核心特性
 
 - **提供者无关** — 通过 `ChatTransport` 接口适配任何 LLM 提供商
-- **类型安全工具** — 用 TypeBox schema 定义工具；`execute` 入参类型由 schema 推断，运行时通过 `Value.Cast` 对模型 JSON 做强制转换/校验
+- **类型安全工具** — 用 TypeBox schema 定义工具；`execute` 入参类型由 schema 推断，运行时通过 `Value.Default` + `Value.Assert` 对模型 JSON 填充默认值并严格校验（不合法参数会报错而非静默转换）
 - **推理内容** — 从支持 `reasoning_content` 的模型（如 OpenAI o1/o3）中流式输出 `reasoning` 增量事件
 - **工具调用** — 原生支持函数调用，自动拼接流式工具参数片段
 - **事件驱动** — 代理运行时通过订阅者模式暴露 `AgentEvent`，便于日志、存储和 UI 集成

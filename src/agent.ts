@@ -35,6 +35,24 @@ function parseArgs(raw: string): Record<string, unknown> {
 }
 
 /**
+ * Apply schema defaults, then strictly validate the model's arguments.
+ *
+ * Unlike `Value.Cast` (which silently coerces bad values into conforming but
+ * semantically wrong data), this only fills missing `default` values and then
+ * rejects anything that still fails the schema - surfacing an `error` event
+ * instead of running a tool on nonsense input.
+ */
+function prepareArgs(name: string, tool: AgentTool, args: Record<string, unknown>) {
+  const value = Value.Default(tool.parameters, args);
+  try {
+    Value.Assert(tool.parameters, value);
+  } catch (err) {
+    throw new Error(`Invalid arguments for tool "${name}": ${(err as Error).message}`);
+  }
+  return value;
+}
+
+/**
  * Create an agent instance. Holds its own tool registry and abort controller,
  * so multiple agents can run concurrently (no module-level singletons).
  */
@@ -112,7 +130,7 @@ export function createAgent(options: AgentOptions): Agent {
               const tool = tools.get(call.name);
               const args = parseArgs(call.arguments);
               const outcome = tool
-                ? await tool.execute(Value.Cast(tool.parameters, args))
+                ? await tool.execute(prepareArgs(call.name, tool, args))
                 : `Unknown tool: ${call.name}`;
               const result = typeof outcome === "string" ? outcome : JSON.stringify(outcome);
               context.push({ role: "tool", toolCallId: call.id, content: result });

@@ -278,7 +278,7 @@ interface AgentTool<T extends TObject = TObject> {
 }
 ```
 
-Before each invocation, the agent runtime runs `Value.Cast(tool.parameters, parsedArgs)` over the JSON the model returned. This fills schema `default` values and applies basic type coercion, so `execute` receives a well-formed value; cast errors are surfaced as an `error` event.
+Before each invocation, the agent runtime runs `Value.Default(tool.parameters, parsedArgs)` to fill schema `default` values, then `Value.Assert(tool.parameters, ...)` to validate. `execute` receives the validated value; invalid tool arguments are surfaced as an `error` event instead of being silently coerced.
 
 ## defineTool
 

@@ -11,7 +11,7 @@ English | [Chinese](./README.zh.md)
 ### Features
 
 - **Provider-agnostic** — adapt any LLM provider via the `ChatTransport` interface
-- **Type-safe tools** — define tools with TypeBox schemas; the `execute` argument type is inferred from the schema, and the model's JSON is coerced/validated at runtime via `Value.Cast`
+- **Type-safe tools** — define tools with TypeBox schemas; the `execute` argument type is inferred from the schema, and the model's JSON is validated at runtime (defaults applied, invalid args rejected) via `Value.Default` + `Value.Assert`
 - **Reasoning content** — streams `reasoning` deltas from models that emit `reasoning_content` (e.g. OpenAI o1/o3)
 - **Tool calls** — native function calling with automatic reassembly of streaming tool-call deltas
 - **Event-driven** — the agent runtime exposes `AgentEvent` via a subscriber pattern, making it easy to integrate with logging, storage, and UI

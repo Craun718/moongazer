@@ -278,7 +278,7 @@ interface AgentTool<T extends TObject = TObject> {
 }
 ```
 
-每次调用前，代理运行时会对模型返回的 JSON 执行 `Value.Cast(tool.parameters, parsedArgs)`，填充 schema 的 `default` 值并做基本类型强制转换，确保 `execute` 拿到结构正确的值；转换出错会作为 `error` 事件抛出。
+每次调用前，代理运行时先对模型返回的 JSON 执行 `Value.Default(tool.parameters, parsedArgs)` 填充 schema 的 `default` 值，再用 `Value.Assert(tool.parameters, ...)` 严格校验。`execute` 拿到的是校验通过的值；不合法的工具参数会作为 `error` 事件抛出，而不会被静默强制转换。
 
 ## defineTool
 
