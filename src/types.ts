@@ -27,6 +27,15 @@ export interface AgentMessage {
   toolCallId?: string;
 }
 
+/**
+ * Per-call context handed to a tool's `execute`. Carries the run's abort
+ * signal so remote/async tools (e.g. MCP-backed tools) can be cancelled when
+ * the run is stopped. Local tools may simply ignore it.
+ */
+export interface ToolExecutionContext {
+  signal: AbortSignal;
+}
+
 export interface AgentTool<T extends TObject = TObject> {
   name: string;
   description: string;
@@ -35,7 +44,26 @@ export interface AgentTool<T extends TObject = TObject> {
    * JSON Schema sent to the model (symbol metadata is stripped on serialization).
    */
   parameters: T;
-  execute: (args: Static<T>) => Promise<unknown> | unknown;
+  execute: (args: Static<T>, ctx: ToolExecutionContext) => Promise<unknown> | unknown;
+}
+
+/**
+ * A source of tools that the agent merges into its registry per run. Used to
+ * bridge remote tool providers (such as an MCP server) whose tool set is
+ * discovered at runtime and may change. Local tools registered directly on the
+ * agent always take precedence over tools with the same name from a source.
+ */
+export interface ToolSource {
+  /** Return the source's current tool set. Called at run start and on invalidation. */
+  list(ctx: ToolExecutionContext): Promise<AgentTool[]>;
+  /**
+   * Subscribe to "the tool set may have changed". The agent re-lists at the
+   * next round boundary (never mid-round). Returns an unsubscribe function.
+   * Optional: sources with a static tool set may omit it.
+   */
+  onInvalidated?: (listener: () => void) => () => void;
+  /** Release any connections/resources held by the source. */
+  close(): void;
 }
 
 export type AgentEvent =

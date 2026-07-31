@@ -1,5 +1,5 @@
 import type { TObject, Static } from "@sinclair/typebox";
-import type { AgentTool } from "./types";
+import type { AgentTool, ToolExecutionContext } from "./types";
 
 /**
  * Define a tool from a TypeBox schema.
@@ -9,7 +9,11 @@ import type { AgentTool } from "./types";
  * the schema and the handler can no longer drift apart. The agent loop also
  * runs `Value.Default` (to fill schema `default` values) and then
  * `Value.Assert` over the model's JSON before invoking `execute`, so invalid
- * arguments are surfaced as an `error` event instead of being silently coerced.
+ * arguments are surfaced as a tool-result error string (fed back to the model)
+ * instead of being silently coerced.
+ *
+ * `execute` receives a `ToolExecutionContext` carrying the run's abort signal,
+ * so long-running or remote tools can be cancelled when the run stops.
  *
  * `defineTool` is the recommended constructor; `AgentTool` can still be used
  * directly when callers want to specify `T` explicitly.
@@ -19,7 +23,7 @@ export function defineTool<T extends TObject>(opts: {
   description: string;
   /** TypeBox object schema; also serves as the JSON Schema sent to the model. */
   parameters: T;
-  execute: (args: Static<T>) => Promise<unknown> | unknown;
+  execute: (args: Static<T>, ctx: ToolExecutionContext) => Promise<unknown> | unknown;
 }): AgentTool<T> {
   return opts;
 }

@@ -5,6 +5,8 @@ export type {
   AgentEvent,
   AgentRunHandle,
   ToolCallPart,
+  ToolExecutionContext,
+  ToolSource,
 } from "./types";
 
 export type { ChatTransport, TransportEvent, TransportRequest } from "./transport";

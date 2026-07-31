@@ -28,6 +28,28 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(vite@8.1.5)
 
+  packages/mcp:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: ^0.34.52
+        version: 0.34.52
+      moongazer:
+        specifier: workspace:*
+        version: link:../..
+    devDependencies:
+      oxlint:
+        specifier: ^1.74.0
+        version: 1.76.0
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(typescript@5.9.2)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.2
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(vite@8.1.5)
+
 packages:
 
   '@emnapi/core@1.11.1':
