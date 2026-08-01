@@ -1,7 +1,7 @@
 {
   "name": "@moongazer/mcp",
   "version": "0.1.0",
-  "description": "MCP client support for moongazer agent loops.",
+  "description": "Browser-native Streamable HTTP MCP client for moongazer agent loops.",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -13,7 +13,10 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",

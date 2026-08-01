@@ -1,9 +1,8 @@
 /**
  * JSON-RPC 2.0 message shapes (the subset MCP uses) and standard error codes.
  *
- * MCP runs JSON-RPC 2.0 over a transport (stdio = newline-delimited JSON,
- * HTTP/SSE). These types are transport-agnostic; the framing layer in
- * `framing.ts` handles the stdio wire format.
+ * MCP runs JSON-RPC 2.0 over Streamable HTTP. These types describe the
+ * request, response, and notification payloads exchanged by that transport.
  */
 
 export interface JsonRpcRequest {

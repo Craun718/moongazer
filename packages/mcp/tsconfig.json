@@ -13,7 +13,6 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "rootDir": "src",
     "paths": {
       "moongazer": ["../../src/index.ts"]
     }
