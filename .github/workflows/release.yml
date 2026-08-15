@@ -12,6 +12,11 @@ on:
           - patch
           - minor
           - major
+      publish_only:
+        description: Publish the selected ref without bumping or creating a tag
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -38,20 +43,25 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck & Test
-        run: pnpm -r typecheck && pnpm -r test
+        run: pnpm --include-workspace-root --recursive typecheck && pnpm --include-workspace-root --recursive test
 
       - name: Bump version
         id: bump
+        if: ${{ inputs.publish_only != true }}
         run: |
           npm version ${{ inputs.bump }} --no-git-tag-version
-          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
       - name: Build
-        run: pnpm -r build
+        run: pnpm --include-workspace-root --recursive build
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Commit, tag, and push
+        if: ${{ inputs.publish_only != true }}
         env:
-          VERSION: ${{ steps.bump.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           TAG="@pulonia/moongazer@${VERSION}"
           git config user.name "github-actions[bot]"
@@ -66,13 +76,27 @@ jobs:
         run: |
           ROOT_VERSION=$(node -p "require('./package.json').version")
           MCP_VERSION=$(node -p "require('./packages/mcp/package.json').version")
-          pnpm -r pack --pack-destination release-packages
-          npm publish "release-packages/pulonia-moongazer-${ROOT_VERSION}.tgz" --access public
-          npm publish "release-packages/pulonia-moongazer-mcp-${MCP_VERSION}.tgz" --access public
+          pnpm --include-workspace-root --recursive pack --pack-destination release-packages
+
+          publish_if_absent() {
+            local name="$1"
+            local version="$2"
+            local tarball="$3"
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "${name}@${version} already exists; skipping"
+              return
+            fi
+            npm publish "./${tarball}" --access public
+          }
+
+          publish_if_absent "@pulonia/moongazer" "$ROOT_VERSION" \
+            "release-packages/pulonia-moongazer-${ROOT_VERSION}.tgz"
+          publish_if_absent "@pulonia/moongazer-mcp" "$MCP_VERSION" \
+            "release-packages/pulonia-moongazer-mcp-${MCP_VERSION}.tgz"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: "@pulonia/moongazer@${{ steps.bump.outputs.version }}"
+          tag_name: "@pulonia/moongazer@${{ steps.version.outputs.version }}"
           generate_release_notes: true
           make_latest: true
