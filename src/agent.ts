@@ -1,6 +1,13 @@
 import { createEmitter } from "./emitter";
 import type { ChatTransport } from "./transport";
-import type { AgentEvent, AgentMessage, AgentRunHandle, AgentTool, ToolCallPart } from "./types";
+import type {
+  AgentEvent,
+  AgentMessage,
+  AgentRunHandle,
+  AgentTool,
+  ToolCallPart,
+  ToolSource,
+} from "./types";
 
 import { Value } from "@sinclair/typebox/value";
 
@@ -18,6 +25,11 @@ export interface RunOptions {
 export interface AgentOptions {
   transport: ChatTransport;
   tools?: AgentTool[];
+  /**
+   * Remote/refreshable tool sources merged into the registry per run. Local
+   * tools shadow source tools on name collision.
+   */
+  toolSources?: ToolSource[];
   /** Maximum tool round-trips before stopping to avoid runaway loops. */
   maxSteps?: number;
 }
@@ -39,8 +51,9 @@ function parseArgs(raw: string): Record<string, unknown> {
  *
  * Unlike `Value.Cast` (which silently coerces bad values into conforming but
  * semantically wrong data), this only fills missing `default` values and then
- * rejects anything that still fails the schema - surfacing an `error` event
- * instead of running a tool on nonsense input.
+ * rejects anything that still fails the schema. A failure here is caught by the
+ * tool-execution guard and surfaced to the model as a `<tool_error>` result
+ * string rather than aborting the whole run.
  */
 function prepareArgs(name: string, tool: AgentTool, args: Record<string, unknown>) {
   const value = Value.Default(tool.parameters, args);
@@ -60,6 +73,7 @@ export function createAgent(options: AgentOptions): Agent {
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = new Map<string, AgentTool>();
   for (const tool of options.tools ?? []) tools.set(tool.name, tool);
+  const sources = options.toolSources ?? [];
 
   return {
     registerTool(tool) {
@@ -84,10 +98,68 @@ export function createAgent(options: AgentOptions): Agent {
       const exec = async (): Promise<void> => {
         // Yield once so callers can subscribe before the first event fires.
         await Promise.resolve();
+
+        // --- Merge local tools + remote tool sources for this run ---
+        // Local tools are seeded first and never displaced; a source tool whose
+        // name collides with a local tool is skipped (local wins) with a
+        // warning. Sources are listed at run start and re-listed at the next
+        // round boundary when they report invalidation (never mid-round).
+        const runTools = new Map<string, AgentTool>(tools);
+        const localNames = new Set(tools.keys());
+        const sourceNames = new Map<ToolSource, Set<string>>();
+        const stale = new Set<ToolSource>();
+        const unsubs: Array<() => void> = [];
+
+        const refreshSource = async (source: ToolSource): Promise<void> => {
+          let remote: AgentTool[];
+          try {
+            remote = await source.list({ signal: controller.signal });
+          } catch (err) {
+            // Aborts propagate; transient list failures keep the stale tool set.
+            if (controller.signal.aborted) throw err;
+            console.warn("[moongazer] tool source list failed, keeping stale tools:", err);
+            stale.delete(source);
+            return;
+          }
+          // Swap this source's contributions: drop its old names (unless they
+          // are local), then add the new ones. Local names always win.
+          const old = sourceNames.get(source);
+          if (old) for (const name of old) if (!localNames.has(name)) runTools.delete(name);
+          const names = new Set<string>();
+          for (const tool of remote) {
+            if (localNames.has(tool.name)) {
+              console.warn(`[moongazer] tool "${tool.name}" from source shadows local tool; skipping`);
+              continue;
+            }
+            runTools.set(tool.name, tool);
+            names.add(tool.name);
+          }
+          sourceNames.set(source, names);
+          stale.delete(source);
+        };
+
         try {
+          for (const source of sources) {
+            await refreshSource(source);
+            if (source.onInvalidated) {
+              const unsub = source.onInvalidated(() => {
+                stale.add(source);
+              });
+              if (unsub) unsubs.push(unsub);
+            }
+          }
+
           let steps = 0;
           for (;;) {
             steps += 1;
+
+            // Re-list any sources that reported invalidation since the last round.
+            if (stale.size > 0) {
+              const toRefresh = [...stale];
+              stale.clear();
+              for (const s of toRefresh) await refreshSource(s);
+            }
+
             emitter.emit({ type: "assistant_start" });
 
             let roundContent = "";
@@ -95,7 +167,7 @@ export function createAgent(options: AgentOptions): Agent {
 
             for await (const event of options.transport.stream({
               messages: context,
-              tools: [...tools.values()],
+              tools: [...runTools.values()],
               signal: controller.signal,
             })) {
               if (controller.signal.aborted) break;
@@ -127,12 +199,24 @@ export function createAgent(options: AgentOptions): Agent {
             }
 
             for (const call of roundCalls) {
-              const tool = tools.get(call.name);
-              const args = parseArgs(call.arguments);
-              const outcome = tool
-                ? await tool.execute(prepareArgs(call.name, tool, args))
-                : `Unknown tool: ${call.name}`;
-              const result = typeof outcome === "string" ? outcome : JSON.stringify(outcome);
+              const tool = runTools.get(call.name);
+              let result: string;
+              try {
+                const outcome = tool
+                  ? await tool.execute(
+                      prepareArgs(call.name, tool, parseArgs(call.arguments)),
+                      { signal: controller.signal },
+                    )
+                  : `Unknown tool: ${call.name}`;
+                result = typeof outcome === "string" ? outcome : JSON.stringify(outcome);
+              } catch (err) {
+                // Abort propagates (re-thrown) so the run stops cleanly. Any
+                // other failure - a thrown handler, invalid args, or a failing
+                // remote call - is isolated into a tool-result error string fed
+                // back to the model so the run can continue instead of dying.
+                if (controller.signal.aborted) throw err;
+                result = `<tool_error name="${call.name}">${(err as Error).message}</tool_error>`;
+              }
               context.push({ role: "tool", toolCallId: call.id, content: result });
               emitter.emit({ type: "tool_result", id: call.id, result });
             }
@@ -144,15 +228,21 @@ export function createAgent(options: AgentOptions): Agent {
           }
         } catch (err) {
           if (!controller.signal.aborted) {
-            // Surface the original stack so silent "Unknown type"-style
-            // failures from tool execution aren't demoted to a UI string
-            // with no console trace.
+            // Surface the original stack so silent failures (e.g. transport
+            // errors) aren't demoted to a UI string with no console trace.
             console.error("[moongazer] agent run error:", err);
             emitter.emit({ type: "error", error: err });
           } else {
             emitter.emit({ type: "abort" });
           }
         } finally {
+          for (const unsub of unsubs) {
+            try {
+              unsub();
+            } catch {
+              /* ignore unsubscribe errors */
+            }
+          }
           emitter.close();
         }
       };

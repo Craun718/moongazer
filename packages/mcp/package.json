@@ -1,0 +1,37 @@
+{
+  "name": "@moongazer/mcp",
+  "version": "0.1.0",
+  "description": "Browser-native Streamable HTTP MCP client for moongazer agent loops.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --fix src",
+    "lint:check": "oxlint src"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.52",
+    "moongazer": "workspace:*"
+  },
+  "devDependencies": {
+    "oxlint": "^1.74.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -3,7 +3,7 @@ import { Type } from "@sinclair/typebox";
 import { createAgent } from "./agent";
 import type { Agent } from "./agent";
 import type { ChatTransport, TransportEvent } from "./transport";
-import type { AgentEvent, AgentMessage } from "./types";
+import type { AgentEvent, AgentMessage, AgentTool, ToolSource } from "./types";
 
 /** A transport that replays scripted rounds and captures the context it saw. */
 function scriptedTransport(rounds: TransportEvent[][], captured?: string[][]): ChatTransport {
@@ -33,6 +33,36 @@ function runToCompletion(agent: Agent, messages: AgentMessage[]): Promise<AgentE
     if (ev.type === "done" || ev.type === "error" || ev.type === "abort") resolve();
   });
   return done.then(() => events);
+}
+
+/** A controllable ToolSource for tests: swap its tool set and signal invalidation. */
+function makeSource(initial: AgentTool[]) {
+  let current = initial;
+  let calls = 0;
+  const listeners = new Set<() => void>();
+  const source: ToolSource = {
+    list: async () => {
+      calls += 1;
+      return current;
+    },
+    onInvalidated: (cb) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    close: () => {},
+  };
+  return {
+    source,
+    setTools: (t: AgentTool[]) => {
+      current = t;
+    },
+    invalidate: () => {
+      for (const l of listeners) l();
+    },
+    listCalls: () => calls,
+  };
 }
 
 describe("createAgent", () => {
@@ -277,10 +307,11 @@ describe("createAgent", () => {
     expect(events.at(-1)).toMatchObject({ type: "done" });
   });
 
-  it("emits an error event when a tool throws", async () => {
+  it("isolates a throwing tool as a tool_result error string and continues", async () => {
     const boom = new Error("kaboom");
     const transport = scriptedTransport([
       [{ type: "tool_calls", calls: [{ id: "c1", name: "fail", arguments: "{}" }] }],
+      [{ type: "content", delta: "recovered" }],
     ]);
     const agent = createAgent({
       transport,
@@ -296,24 +327,21 @@ describe("createAgent", () => {
       ],
     });
 
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
 
-      // The throwing tool produces no tool_result; the run surfaces an error.
-      expect(events.some((e) => e.type === "tool_result")).toBe(false);
-      expect(events.at(-1)).toMatchObject({ type: "error" });
-      expect((events.at(-1) as Extract<AgentEvent, { type: "error" }>).error).toBe(boom);
-      // The original error is also logged for traceability before the event fires.
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining("agent run error"), boom);
-    } finally {
-      spy.mockRestore();
-    }
+    // The throwing tool becomes an error string fed back to the model; the run continues.
+    const result = events.find(
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result",
+    );
+    expect(result?.result).toBe(`<tool_error name="fail">kaboom</tool_error>`);
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "done" });
   });
 
-  it("rejects wrong-type arguments with an error event", async () => {
+  it("isolates wrong-type arguments as a tool_result error string and continues", async () => {
     const transport = scriptedTransport([
       [{ type: "tool_calls", calls: [{ id: "c1", name: "f", arguments: '{"n":"abc"}' }] }],
+      [{ type: "content", delta: "ok" }],
     ]);
     const agent = createAgent({
       transport,
@@ -327,23 +355,22 @@ describe("createAgent", () => {
       ],
     });
 
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
 
-      // execute is never reached; the bad args surface as an error event.
-      expect(events.some((e) => e.type === "tool_result")).toBe(false);
-      expect(events.at(-1)).toMatchObject({ type: "error" });
-      const err = (events.at(-1) as Extract<AgentEvent, { type: "error" }>).error as Error;
-      expect(err.message).toContain('Invalid arguments for tool "f"');
-    } finally {
-      spy.mockRestore();
-    }
+    // execute is never reached; the bad args surface as a tool_result, not an error.
+    const result = events.find(
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result",
+    );
+    expect(result?.result).toContain("tool_error");
+    expect(result?.result).toContain('Invalid arguments for tool "f"');
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "done" });
   });
 
-  it("rejects missing required arguments with an error event", async () => {
+  it("isolates missing required arguments as a tool_result error string", async () => {
     const transport = scriptedTransport([
       [{ type: "tool_calls", calls: [{ id: "c1", name: "f", arguments: "{}" }] }],
+      [{ type: "content", delta: "ok" }],
     ]);
     const agent = createAgent({
       transport,
@@ -357,20 +384,20 @@ describe("createAgent", () => {
       ],
     });
 
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
 
-      expect(events.some((e) => e.type === "tool_result")).toBe(false);
-      expect(events.at(-1)).toMatchObject({ type: "error" });
-    } finally {
-      spy.mockRestore();
-    }
+    const result = events.find(
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result",
+    );
+    expect(result?.result).toContain("tool_error");
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "done" });
   });
 
-  it("rejects constraint-violating arguments with an error event", async () => {
+  it("isolates constraint-violating arguments as a tool_result error string", async () => {
     const transport = scriptedTransport([
       [{ type: "tool_calls", calls: [{ id: "c1", name: "f", arguments: '{"n":1}' }] }],
+      [{ type: "content", delta: "ok" }],
     ]);
     const agent = createAgent({
       transport,
@@ -384,14 +411,162 @@ describe("createAgent", () => {
       ],
     });
 
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+
+    const result = events.find(
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result",
+    );
+    expect(result?.result).toContain("tool_error");
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+  });
+
+  it("merges tools from a ToolSource into the run", async () => {
+    const { source } = makeSource([
+      { name: "remote_tool", description: "r", parameters: Type.Object({}), execute: () => "remote-result" },
+    ]);
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "remote_tool", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({ transport, toolSources: [source] });
+
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+
+    const result = events.find(
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result",
+    );
+    expect(result?.result).toBe("remote-result");
+  });
+
+  it("local tools shadow source tools on name collision", async () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
+      const { source } = makeSource([
+        { name: "dup", description: "", parameters: Type.Object({}), execute: () => "remote" },
+      ]);
+      const transport = scriptedTransport([
+        [{ type: "tool_calls", calls: [{ id: "c1", name: "dup", arguments: "{}" }] }],
+        [{ type: "content", delta: "done" }],
+      ]);
+      const agent = createAgent({
+        transport,
+        tools: [{ name: "dup", description: "", parameters: Type.Object({}), execute: () => "local" }],
+        toolSources: [source],
+      });
+
       const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
 
-      expect(events.some((e) => e.type === "tool_result")).toBe(false);
-      expect(events.at(-1)).toMatchObject({ type: "error" });
+      const result = events.find(
+        (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result",
+      );
+      expect(result?.result).toBe("local");
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it("re-lists a tool source on invalidation at the next round boundary", async () => {
+    const { source, setTools, invalidate, listCalls } = makeSource([]);
+    const toolB: AgentTool = {
+      name: "b",
+      description: "",
+      parameters: Type.Object({}),
+      execute: () => "b-result",
+    };
+    const toolA: AgentTool = {
+      name: "a",
+      description: "",
+      parameters: Type.Object({}),
+      execute: () => {
+        // While executing, the source gains a new tool and signals invalidation.
+        setTools([toolA, toolB]);
+        invalidate();
+        return "a-result";
+      },
+    };
+    setTools([toolA]);
+
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "1", name: "a", arguments: "{}" }] }],
+      [{ type: "tool_calls", calls: [{ id: "2", name: "b", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({ transport, toolSources: [source] });
+
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+
+    // Initial list at run start + one re-list after invalidation.
+    expect(listCalls()).toBe(2);
+    const bResult = events.find(
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result" && e.id === "2",
+    );
+    expect(bResult?.result).toBe("b-result");
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+  });
+
+  it("keeps going when a source's initial list fails (non-abort)", async () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const source: ToolSource = {
+        list: async () => {
+          throw new Error("list boom");
+        },
+        close: () => {},
+      };
+      const transport = scriptedTransport([[{ type: "content", delta: "ok" }]]);
+      const agent = createAgent({ transport, toolSources: [source] });
+
+      const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+
+      expect(events.some((e) => e.type === "error")).toBe(false);
+      expect(events.at(-1)).toMatchObject({ type: "done" });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("surfaces abort during tool execution as abort, not error", async () => {
+    let toolStarted!: () => void;
+    const started = new Promise<void>((r) => {
+      toolStarted = r;
+    });
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "1", name: "slow", arguments: "{}" }] }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        {
+          name: "slow",
+          description: "",
+          parameters: Type.Object({}),
+          execute: (_args, ctx) => {
+            toolStarted();
+            return new Promise<string>((_resolve, reject) => {
+              ctx.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+            });
+          },
+        },
+      ],
+    });
+
+    const events: AgentEvent[] = [];
+    let resolve!: () => void;
+    const done = new Promise<void>((r) => {
+      resolve = r;
+    });
+    const handle = agent.run({ messages: [{ role: "user", content: "go" }] });
+    handle.subscribe((ev) => {
+      events.push(ev);
+      if (ev.type === "abort" || ev.type === "error" || ev.type === "done") resolve();
+    });
+
+    await started;
+    handle.stop();
+    await done;
+
+    expect(events.at(-1)).toMatchObject({ type: "abort" });
+    expect(events.some((e) => e.type === "error")).toBe(false);
   });
 });
