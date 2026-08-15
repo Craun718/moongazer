@@ -97,7 +97,7 @@ jobs:
               echo "${name}@${version} already exists; skipping"
               return
             fi
-            npm publish "./${tarball}" --access public --loglevel verbose
+            npm publish "./${tarball}" --access public
           }
 
           publish_if_absent "@pulonia/moongazer" "$ROOT_VERSION" \
