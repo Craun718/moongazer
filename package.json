@@ -2,6 +2,10 @@
   "name": "@pulonia/moongazer",
   "version": "0.4.2",
   "description": "Provider-agnostic TypeScript agent runtime with typed tool calling and streaming events.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Craun718/moongazer.git"
+  },
   "files": [
     "dist",
     "README.md",

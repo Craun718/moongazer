@@ -28,8 +28,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: pnpm
           registry-url: https://registry.npmjs.org
+
+      - name: Use npm with trusted publishing support
+        run: npm install -g npm@^11.15.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -59,10 +61,13 @@ jobs:
           git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
           git push origin "$TAG"
 
-      - name: Publish to npm
-        run: pnpm -r publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm with trusted publishing
+        run: |
+          ROOT_VERSION=$(node -p "require('./package.json').version")
+          MCP_VERSION=$(node -p "require('./packages/mcp/package.json').version")
+          pnpm -r pack --pack-destination release-packages
+          npm publish "release-packages/pulonia-moongazer-${ROOT_VERSION}.tgz" --access public
+          npm publish "release-packages/pulonia-moongazer-mcp-${MCP_VERSION}.tgz" --access public
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
