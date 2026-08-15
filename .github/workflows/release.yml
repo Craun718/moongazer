@@ -80,7 +80,11 @@ jobs:
           git push origin "$TAG"
 
       - name: Publish to npm with trusted publishing
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/npm-publish.rc
+          NODE_AUTH_TOKEN: ""
         run: |
+          printf 'registry=https://registry.npmjs.org/\n' > "$NPM_CONFIG_USERCONFIG"
           ROOT_VERSION=$(node -p "require('./package.json').version")
           MCP_VERSION=$(node -p "require('./packages/mcp/package.json').version")
           pnpm --include-workspace-root --recursive pack --pack-destination release-packages
