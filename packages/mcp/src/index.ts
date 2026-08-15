@@ -29,9 +29,5 @@ export type { JsonSchema } from "./schema/convert";
 // Browser-native Streamable HTTP transport and MCP client.
 export { HttpMcpTransport, McpHttpError } from "./http";
 export type { HttpMcpTransportOptions, McpRequestOptions } from "./http";
-export {
-  createMcpClient,
-  MCP_PROTOCOL_VERSION,
-  MCP_PROTOCOL_VERSIONS,
-} from "./client";
+export { createMcpClient, MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSIONS } from "./client";
 export type { CreateMcpClientOptions, McpClientInfo, McpProtocolVersion } from "./client";

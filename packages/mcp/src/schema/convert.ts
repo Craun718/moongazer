@@ -109,11 +109,7 @@ function literalFor(value: unknown): TSchema {
  * internal pointer paths) is left to the caller as an unsafe verbatim node.
  * `stack` guards against self-referential cycles.
  */
-function resolveRef(
-  ref: string,
-  defs: Defs,
-  stack: Set<string>,
-): TSchema | undefined {
+function resolveRef(ref: string, defs: Defs, stack: Set<string>): TSchema | undefined {
   const match = /^#\/(?:\$defs|definitions)\/(.+)$/.exec(ref);
   if (!match) return undefined;
   const token = match[1] ?? "";
@@ -159,9 +155,9 @@ function convertNode(schema: JsonSchema, defs: Defs, stack: Set<string>): TSchem
   }
   if (Array.isArray(schema.anyOf) || Array.isArray(schema.oneOf)) {
     const list = (schema.anyOf ?? schema.oneOf) as unknown;
-    const members = (Array.isArray(list) ? list : []).filter(isJsonObject).map((s) =>
-      convertNode(s, defs, stack),
-    );
+    const members = (Array.isArray(list) ? list : [])
+      .filter(isJsonObject)
+      .map((s) => convertNode(s, defs, stack));
     return members.length === 0
       ? Type.Unknown(annotations(schema))
       : members.length === 1
@@ -228,9 +224,7 @@ function convertArray(schema: JsonSchema, defs: Defs, stack: Set<string>): TSche
     // keep the schema verbatim so it round-trips to the model.
     return Type.Unknown(schema as SchemaOptions);
   }
-  const itemNode = isJsonObject(items)
-    ? convertNode(items, defs, stack)
-    : Type.Unknown(); // missing/true `items` -> any element allowed
+  const itemNode = isJsonObject(items) ? convertNode(items, defs, stack) : Type.Unknown(); // missing/true `items` -> any element allowed
   return Type.Array(itemNode, pick<ArrayOptions>(schema, ARRAY_OPT_KEYS));
 }
 

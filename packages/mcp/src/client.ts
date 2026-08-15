@@ -97,11 +97,9 @@ export async function createMcpClient(options: CreateMcpClientOptions): Promise<
     // Modern MCP is stateless: there is no initialize/initialized handshake and
     // no session header. Discovery is optional by spec, but gives this client a
     // stable namespace and advertises whether the server exposes tools at all.
-    const discover = await transport.request<DiscoverResult>(
-      "server/discover",
-      undefined,
-      { timeout: options.initTimeout ?? 30000 },
-    );
+    const discover = await transport.request<DiscoverResult>("server/discover", undefined, {
+      timeout: options.initTimeout ?? 30000,
+    });
     assertComplete(discover, "server/discover");
     capabilities = discover?.capabilities;
     serverName = serverInfoFromResultMeta(discover?._meta);
@@ -149,10 +147,7 @@ export async function createMcpClient(options: CreateMcpClientOptions): Promise<
       try {
         result.push(makeTool(transport, namespace, def, options.defaultTimeout));
       } catch (err) {
-        console.warn(
-          `[moongazer/mcp] skipping tool "${def?.name}" with invalid inputSchema:`,
-          err,
-        );
+        console.warn(`[moongazer/mcp] skipping tool "${def?.name}" with invalid inputSchema:`, err);
       }
     }
     return result;
@@ -228,9 +223,7 @@ function assertComplete(res: { resultType?: string } | undefined, method: string
 }
 
 function serverInfoFromResultMeta(meta: Record<string, unknown> | undefined): string | undefined {
-  const info = meta?.["io.modelcontextprotocol/serverInfo"] as
-    | { name?: unknown }
-    | undefined;
+  const info = meta?.["io.modelcontextprotocol/serverInfo"] as { name?: unknown } | undefined;
   return typeof info?.name === "string" ? info.name : undefined;
 }
 
@@ -254,11 +247,7 @@ function headerBindings(inputSchema: unknown): HeaderBinding[] {
   return bindings;
 }
 
-function collectHeaderBindings(
-  schema: unknown,
-  path: string[],
-  output: HeaderBinding[],
-): void {
+function collectHeaderBindings(schema: unknown, path: string[], output: HeaderBinding[]): void {
   if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return;
   const properties = (schema as { properties?: unknown }).properties;
   if (typeof properties !== "object" || properties === null || Array.isArray(properties)) return;

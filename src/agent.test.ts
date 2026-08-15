@@ -423,7 +423,12 @@ describe("createAgent", () => {
 
   it("merges tools from a ToolSource into the run", async () => {
     const { source } = makeSource([
-      { name: "remote_tool", description: "r", parameters: Type.Object({}), execute: () => "remote-result" },
+      {
+        name: "remote_tool",
+        description: "r",
+        parameters: Type.Object({}),
+        execute: () => "remote-result",
+      },
     ]);
     const transport = scriptedTransport([
       [{ type: "tool_calls", calls: [{ id: "c1", name: "remote_tool", arguments: "{}" }] }],
@@ -451,7 +456,9 @@ describe("createAgent", () => {
       ]);
       const agent = createAgent({
         transport,
-        tools: [{ name: "dup", description: "", parameters: Type.Object({}), execute: () => "local" }],
+        tools: [
+          { name: "dup", description: "", parameters: Type.Object({}), execute: () => "local" },
+        ],
         toolSources: [source],
       });
 
@@ -499,7 +506,8 @@ describe("createAgent", () => {
     // Initial list at run start + one re-list after invalidation.
     expect(listCalls()).toBe(2);
     const bResult = events.find(
-      (e): e is Extract<AgentEvent, { type: "tool_result" }> => e.type === "tool_result" && e.id === "2",
+      (e): e is Extract<AgentEvent, { type: "tool_result" }> =>
+        e.type === "tool_result" && e.id === "2",
     );
     expect(bResult?.result).toBe("b-result");
     expect(events.at(-1)).toMatchObject({ type: "done" });
@@ -544,7 +552,9 @@ describe("createAgent", () => {
           execute: (_args, ctx) => {
             toolStarted();
             return new Promise<string>((_resolve, reject) => {
-              ctx.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+              ctx.signal.addEventListener("abort", () => reject(new Error("aborted")), {
+                once: true,
+              });
             });
           },
         },

@@ -91,11 +91,7 @@ export class HttpMcpTransport {
     this.clientInfo = clientInfo;
   }
 
-  async request<R>(
-    method: string,
-    params?: unknown,
-    options?: McpRequestOptions,
-  ): Promise<R> {
+  async request<R>(method: string, params?: unknown, options?: McpRequestOptions): Promise<R> {
     const id = this.nextId++;
     const controller = new AbortController();
     const signal = anySignal(options?.signal, controller.signal);
@@ -191,7 +187,9 @@ export class HttpMcpTransport {
       signal,
     });
     if (!response.ok) {
-      throw new McpHttpError(`MCP HTTP request failed (${response.status})`, { status: response.status });
+      throw new McpHttpError(`MCP HTTP request failed (${response.status})`, {
+        status: response.status,
+      });
     }
     this.captureSession(response);
     let payload = await readMessages(response);

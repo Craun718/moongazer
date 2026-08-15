@@ -128,7 +128,9 @@ export function createAgent(options: AgentOptions): Agent {
           const names = new Set<string>();
           for (const tool of remote) {
             if (localNames.has(tool.name)) {
-              console.warn(`[moongazer] tool "${tool.name}" from source shadows local tool; skipping`);
+              console.warn(
+                `[moongazer] tool "${tool.name}" from source shadows local tool; skipping`,
+              );
               continue;
             }
             runTools.set(tool.name, tool);
@@ -203,10 +205,9 @@ export function createAgent(options: AgentOptions): Agent {
               let result: string;
               try {
                 const outcome = tool
-                  ? await tool.execute(
-                      prepareArgs(call.name, tool, parseArgs(call.arguments)),
-                      { signal: controller.signal },
-                    )
+                  ? await tool.execute(prepareArgs(call.name, tool, parseArgs(call.arguments)), {
+                      signal: controller.signal,
+                    })
                   : `Unknown tool: ${call.name}`;
                 result = typeof outcome === "string" ? outcome : JSON.stringify(outcome);
               } catch (err) {

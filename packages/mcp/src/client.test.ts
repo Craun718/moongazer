@@ -57,7 +57,9 @@ describe("createMcpClient", () => {
     const tools = await source.list({ signal: new AbortController().signal });
     expect(tools).toHaveLength(1);
     expect(tools[0]?.name).toBe("weather:forecast");
-    await expect(tools[0]!.execute({}, { signal: new AbortController().signal })).resolves.toBe("sunny");
+    await expect(tools[0]!.execute({}, { signal: new AbortController().signal })).resolves.toBe(
+      "sunny",
+    );
 
     const calls = fetch.mock.calls;
     expect(calls).toHaveLength(4);
@@ -205,9 +207,12 @@ describe("createMcpClient", () => {
     });
     const tools = await source.list({ signal: new AbortController().signal });
     await expect(
-      tools[0]!.execute({ region: "us-west", city: "Seattle" }, {
-        signal: new AbortController().signal,
-      }),
+      tools[0]!.execute(
+        { region: "us-west", city: "Seattle" },
+        {
+          signal: new AbortController().signal,
+        },
+      ),
     ).resolves.toBe("sunny");
 
     const calls = fetch.mock.calls;

@@ -6,11 +6,7 @@
  * protocol identity travels with every request and there is no protocol-level
  * session.
  */
-export const MCP_PROTOCOL_VERSIONS = [
-  "2025-06-18",
-  "2025-11-25",
-  "2026-07-28",
-] as const;
+export const MCP_PROTOCOL_VERSIONS = ["2025-06-18", "2025-11-25", "2026-07-28"] as const;
 
 export type McpProtocolVersion = (typeof MCP_PROTOCOL_VERSIONS)[number];
 
@@ -24,7 +20,6 @@ export function isModernProtocolVersion(version: McpProtocolVersion): boolean {
 
 export function isSupportedProtocolVersion(version: unknown): version is McpProtocolVersion {
   return (
-    typeof version === "string" &&
-    MCP_PROTOCOL_VERSIONS.includes(version as McpProtocolVersion)
+    typeof version === "string" && MCP_PROTOCOL_VERSIONS.includes(version as McpProtocolVersion)
   );
 }
