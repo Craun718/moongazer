@@ -21,7 +21,7 @@ English | [Chinese](./README.zh.md)
 ## Installation
 
 ```bash
-pnpm add moongazer
+pnpm add @pulonia/moongazer
 ```
 
 ## API Documentation
@@ -31,8 +31,8 @@ pnpm add moongazer
 ## Quick Start
 
 ```typescript
-import { createAgent, createOpenAITransport, defineTool, Type } from "moongazer";
-import type { OpenAIRawStream } from "moongazer";
+import { createAgent, createOpenAITransport, defineTool, Type } from "@pulonia/moongazer";
+import type { OpenAIRawStream } from "@pulonia/moongazer";
 
 // 1. Define a tool
 const getWeather = defineTool({

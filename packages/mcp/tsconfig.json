@@ -14,7 +14,7 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "paths": {
-      "moongazer": ["../../src/index.ts"]
+      "@pulonia/moongazer": ["../../src/index.ts"]
     }
   },
   "include": ["src"]

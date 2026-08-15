@@ -1,7 +1,7 @@
 {
-  "name": "@moongazer/mcp",
+  "name": "@pulonia/moongazer-mcp",
   "version": "0.1.0",
-  "description": "Browser-native Streamable HTTP MCP client for moongazer agent loops.",
+  "description": "Browser-native MCP Streamable HTTP tool source for @pulonia/moongazer agents.",
   "files": [
     "dist",
     "README.md"
@@ -17,6 +17,10 @@
       "default": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -26,7 +30,7 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",
-    "moongazer": "workspace:*"
+    "@pulonia/moongazer": "workspace:*"
   },
   "devDependencies": {
     "oxlint": "^1.74.0",

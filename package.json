@@ -1,6 +1,7 @@
 {
-  "name": "moongazer",
+  "name": "@pulonia/moongazer",
   "version": "0.4.0",
+  "description": "Provider-agnostic TypeScript agent runtime with typed tool calling and streaming events.",
   "files": [
     "dist",
     "README.md",

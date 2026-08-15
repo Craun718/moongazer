@@ -267,7 +267,7 @@ interface ToolCallPart {
 Tool definition. `parameters` is a [TypeBox](https://www.npmjs.com/package/@sinclair/typebox) `TObject` schema — it doubles as the JSON Schema sent to the model and as the compile-time type of `execute`'s argument (via `Static<T>`), so the schema and the handler can no longer drift apart.
 
 ```typescript
-import { Type, type Static } from "moongazer";
+import { Type, type Static } from "@pulonia/moongazer";
 
 interface AgentTool<T extends TObject = TObject> {
   name: string;
@@ -296,7 +296,7 @@ function defineTool<T extends TObject>(opts: {
 #### Example
 
 ```typescript
-import { defineTool, Type } from "moongazer";
+import { defineTool, Type } from "@pulonia/moongazer";
 
 const searchTool = defineTool({
   name: "web_search",

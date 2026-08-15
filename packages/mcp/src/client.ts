@@ -1,4 +1,4 @@
-import type { AgentTool, ToolExecutionContext, ToolSource } from "moongazer";
+import type { AgentTool, ToolExecutionContext, ToolSource } from "@pulonia/moongazer";
 import { encodeMcpHeaderValue, HttpMcpTransport } from "./http";
 import type { HttpMcpTransportOptions } from "./http";
 import { inputSchemaToTypeBox } from "./schema/convert";

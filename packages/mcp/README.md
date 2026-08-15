@@ -1,10 +1,10 @@
-# @moongazer/mcp
+# @pulonia/moongazer-mcp
 
 Browser-native MCP tool source for moongazer agent loops. The client supports
 Streamable HTTP revisions `2025-06-18`, `2025-11-25`, and `2026-07-28`.
 
 ```ts
-import { createMcpClient } from "@moongazer/mcp";
+import { createMcpClient } from "@pulonia/moongazer-mcp";
 
 const mcp = await createMcpClient({
   url: "https://mcp.example.com/mcp",

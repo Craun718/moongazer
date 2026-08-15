@@ -30,12 +30,12 @@ importers:
 
   packages/mcp:
     dependencies:
+      '@pulonia/moongazer':
+        specifier: workspace:*
+        version: link:../..
       '@sinclair/typebox':
         specifier: ^0.34.52
         version: 0.34.52
-      moongazer:
-        specifier: workspace:*
-        version: link:../..
     devDependencies:
       oxlint:
         specifier: ^1.74.0

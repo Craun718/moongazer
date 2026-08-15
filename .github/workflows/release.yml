@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck & Test
-        run: pnpm typecheck && pnpm test
+        run: pnpm -r typecheck && pnpm -r test
 
       - name: Bump version
         id: bump
@@ -44,13 +44,13 @@ jobs:
           echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
       - name: Build
-        run: pnpm build
+        run: pnpm -r build
 
       - name: Commit, tag, and push
         env:
           VERSION: ${{ steps.bump.outputs.version }}
         run: |
-          TAG="moongazer@${VERSION}"
+          TAG="@pulonia/moongazer@${VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json
@@ -60,13 +60,13 @@ jobs:
           git push origin "$TAG"
 
       - name: Publish to npm
-        run: pnpm publish --provenance
+        run: pnpm -r publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: moongazer@${{ steps.bump.outputs.version }}
+          tag_name: "@pulonia/moongazer@${{ steps.bump.outputs.version }}"
           generate_release_notes: true
           make_latest: true

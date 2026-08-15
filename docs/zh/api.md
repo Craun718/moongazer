@@ -267,7 +267,7 @@ interface ToolCallPart {
 工具定义。`parameters` 是一个 TypeBox `TObject` schema —— 它同时作为发送给模型的 JSON Schema 和 `execute` 入参的编译期类型（通过 `Static<T>`），因此 schema 与处理函数不会再失配。
 
 ```typescript
-import { Type, type Static } from "moongazer";
+import { Type, type Static } from "@pulonia/moongazer";
 
 interface AgentTool<T extends TObject = TObject> {
   name: string;
@@ -296,7 +296,7 @@ function defineTool<T extends TObject>(opts: {
 #### 示例
 
 ```typescript
-import { defineTool, Type } from "moongazer";
+import { defineTool, Type } from "@pulonia/moongazer";
 
 const searchTool = defineTool({
   name: "web_search",

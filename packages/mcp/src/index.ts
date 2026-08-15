@@ -1,5 +1,5 @@
 /**
- * @moongazer/mcp - MCP (Model Context Protocol) client support for moongazer.
+ * @pulonia/moongazer-mcp - MCP support for @pulonia/moongazer.
  *
  * This package keeps MCP machinery out of the moongazer core: a hand-rolled
  * Streamable HTTP client and a JSON Schema -> TypeBox converter that bridges
