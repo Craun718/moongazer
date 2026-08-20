@@ -17,6 +17,7 @@ src/
 ## 目录
 
 - [createAgent](#createagent)
+- [AgentHooks](#agenthooks)
 - [createOpenAITransport](#createopentransport)
 - [createEmitter](#createemitter)
 - [ChatTransport](#chattransport)
@@ -40,11 +41,13 @@ function createAgent(options: AgentOptions): Agent;
 
 ### AgentOptions
 
-| 属性        | 类型            | 默认值    | 描述                           |
-| ----------- | --------------- | --------- | ------------------------------ |
-| `transport` | `ChatTransport` | —（必填） | 流式聊天传输层                 |
-| `tools`     | `AgentTool[]`   | `[]`      | 初始工具列表                   |
-| `maxSteps`  | `number`        | `6`       | 工具调用最大轮次，防止无限循环 |
+| 属性          | 类型            | 默认值    | 描述                           |
+| ------------- | --------------- | --------- | ------------------------------ |
+| `transport`   | `ChatTransport` | —（必填） | 流式聊天传输层                 |
+| `tools`       | `AgentTool[]`   | `[]`      | 初始工具列表                   |
+| `toolSources` | `ToolSource[]`  | `[]`      | 可刷新的远程工具来源           |
+| `maxSteps`    | `number`        | `6`       | 工具调用最大轮次，防止无限循环 |
+| `hooks`       | `AgentHooks`    | —         | 所有 run 共享的 hooks          |
 
 ### Agent
 
@@ -63,6 +66,7 @@ interface Agent {
 | ---------- | ---------------- | --------- | ---------------------- |
 | `messages` | `AgentMessage[]` | —（必填） | 对话历史（不会被变异） |
 | `signal`   | `AbortSignal`    | —         | 外部中止信号           |
+| `hooks`    | `RunHooks`       | —         | 当前 run 专属 hooks    |
 
 #### 示例
 
@@ -79,6 +83,102 @@ const handle = agent.run({
 
 handle.subscribe((event) => {
   if (event.type === "content") process.stdout.write(event.delta);
+});
+```
+
+---
+
+## AgentHooks
+
+Hooks 是 agent runtime 的决策点。它们与 `AgentEvent` 互补：事件是给观察者的只读通知，hooks 可以修改请求数据、短路工作或停止运行。
+
+```text
+run start
+  -> tool source discovery / refresh
+  -> each model round
+     -> beforeModelRequest
+     -> transport streaming
+     -> afterModelResponse
+     -> beforeToolExecute
+     -> tool execute
+     -> afterToolExecute
+     -> shouldContinue
+  -> run end
+```
+
+Agent 级 hooks 通过 `createAgent({ hooks })` 传入；run 级 hooks 通过 `agent.run({ hooks })` 传入。同一 hook 点先执行 agent hooks，再执行 run hooks；前一个 hook 返回的修改对后一个 hook 可见。
+
+```typescript
+interface AgentHooks {
+  onRunStart?: (ctx: RunStartContext) => MaybePromise<void>;
+  onRunEnd?: (ctx: RunEndContext) => MaybePromise<void>;
+
+  beforeToolsResolved?: (ctx: ToolsPhaseContext) => MaybePromise<void>;
+  afterToolsResolved?: (ctx: ToolsResolvedContext) => MaybePromise<ToolsMutationResult | void>;
+
+  beforeModelRequest?: (
+    ctx: ModelRequestContext & BeforeModelRequestInput,
+  ) => MaybePromise<ModelRequestMutationResult | StopResult | void>;
+  afterModelResponse?: (
+    ctx: ModelResponseContext,
+  ) => MaybePromise<ModelResponseMutationResult | StopResult | void>;
+
+  beforeToolExecute?: (
+    ctx: ToolExecutionContextData & BeforeToolExecuteInput,
+  ) => MaybePromise<ToolArgsMutationResult | ToolShortCircuitResult | StopResult | void>;
+  afterToolExecute?: (
+    ctx: ToolExecutionContextData & AfterToolExecuteInput,
+  ) => MaybePromise<ToolResultMutationResult | StopResult | void>;
+
+  shouldContinue?: (ctx: ContinueContext) => MaybePromise<ContinueDecision | void>;
+}
+```
+
+| Hook                  | 时机                                  | 可返回                                |
+| --------------------- | ------------------------------------- | ------------------------------------- |
+| `onRunStart`          | 工具发现前                            | 仅观察                                |
+| `beforeToolsResolved` | 每次 `ToolSource.list()` 前           | 仅观察                                |
+| `afterToolsResolved`  | 本地/来源工具合并和本地优先规则应用后 | `{ tools }`                           |
+| `beforeModelRequest`  | 每次 transport 请求前                 | messages、tools 或 stop               |
+| `afterModelResponse`  | 流结束后、工具执行前                  | assistant message、tool calls 或 stop |
+| `beforeToolExecute`   | 参数解析、默认值和校验后              | args、短路 result 或 stop             |
+| `afterToolExecute`    | 工具执行或隔离的工具错误后            | result 或 stop                        |
+| `shouldContinue`      | 内置规则允许进入下一轮时              | `{ continue: false }`                 |
+| `onRunEnd`            | 终态事件后                            | 仅观察                                |
+
+关键规则：
+
+- Hook 输入使用 readonly 数组；需要修改时返回替换数组，不要原地修改入参。
+- `beforeModelRequest` 的 messages 只影响本次 provider 请求，不写入 canonical transcript。
+- `beforeModelRequest` 的 tools 同时用于模型可见列表和实际执行查找。
+- Hook 返回的工具列表不允许重复 name。
+- `beforeToolExecute` 返回的 args 会重新应用默认值并执行 schema 校验。
+- `beforeToolExecute` 返回 result 时跳过 `tool.execute`；`afterToolExecute` 仍会执行，且 `shortCircuited: true`。
+- Unknown tool 也会触发工具 hooks，其中 `tool` 为 `undefined`。
+- 工具失败、非法参数和普通工具 hook 失败都会转换为 `<tool_error>` result。
+- 工具发现、模型阶段、`shouldContinue` 和 `onRunStart` hook 失败会终止 run。
+- Hook 返回 stop 时发出 `stopped`；外部取消或 `handle.stop()` 发出 `abort`。
+- `onRunEnd` 对每种终态只执行一次；它自身失败只记录日志，不替换已发出的终态。
+- `shouldContinue` 不能突破 `maxSteps`。
+
+```typescript
+const handle = agent.run({
+  messages,
+  hooks: {
+    beforeModelRequest: ({ messages, tools }) => ({
+      messages: [...messages, { role: "system", content: `Tenant: ${tenantId}` }],
+      tools: tools.filter((tool) => permissions.canCall(tool.name)),
+    }),
+    beforeToolExecute: ({ tool }) => {
+      if (!tool || !permissions.canCall(tool.name)) {
+        return { result: "<tool_error>permission denied</tool_error>" };
+      }
+    },
+    afterToolExecute: ({ result }) => ({ result: redactSecrets(result) }),
+    onRunEnd: ({ status, messages }) => {
+      void saveTranscript({ status, messages });
+    },
+  },
 });
 ```
 
@@ -207,14 +307,21 @@ type TransportEvent =
 
 ```typescript
 type AgentEvent =
-    | { type: "assistant_start" }
-    | { type: "content"; delta: string }
-    | { type: "tool_calls"; calls: ToolCallPart[] }
-    | { type: "tool_result"; id: string; result: string }
-    | { type: "done" }
-    | { type: "error"; error: unknown }
-    | { type: "abort" };
-    | { type: "reasoning"; delta: string }
+  | { type: "assistant_start" }
+  | { type: "content"; delta: string }
+  | { type: "tool_calls"; calls: ToolCallPart[] }
+  | {
+      type: "tool_result";
+      id: string;
+      result: string;
+      name?: string;
+      durationMs?: number;
+    }
+  | { type: "done" }
+  | { type: "error"; error: unknown }
+  | { type: "abort" }
+  | { type: "reasoning"; delta: string }
+  | { type: "stopped"; reason?: string };
 ```
 
 | 事件类型          | 描述                               |
@@ -227,6 +334,7 @@ type AgentEvent =
 | `error`           | 运行出错                           |
 | `abort`           | 运行被中止                         |
 | `reasoning`       | 来自模型的推理文本增量（如思维链） |
+| `stopped`         | Hook 主动停止运行                  |
 
 ---
 
@@ -319,13 +427,15 @@ const searchTool = defineTool({
 
 ```typescript
 interface AgentRunHandle {
+  runId: string;
   subscribe(listener: (event: AgentEvent) => void): () => void;
   stop(): void;
 }
 ```
 
-| 方法        | 描述                           |
+| 成员        | 描述                           |
 | ----------- | ------------------------------ |
+| `runId`     | 用于链路追踪和遥测的稳定 ID    |
 | `subscribe` | 订阅代理事件，返回取消订阅函数 |
 | `stop`      | 中止运行，保留已收到的部分内容 |
 

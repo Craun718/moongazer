@@ -14,6 +14,7 @@ English | [Chinese](./README.zh.md)
 - **Type-safe tools** — define tools with TypeBox schemas; the `execute` argument type is inferred from the schema, and the model's JSON is validated at runtime (defaults applied, invalid args rejected) via `Value.Default` + `Value.Assert`
 - **Reasoning content** — streams `reasoning` deltas from models that emit `reasoning_content` (e.g. OpenAI o1/o3)
 - **Tool calls** — native function calling with automatic reassembly of streaming tool-call deltas
+- **Lifecycle hooks** — modify model requests, authorize and audit tool calls, rewrite results, and control continuation at agent or run scope
 - **Event-driven** — the agent runtime exposes `AgentEvent` via a subscriber pattern, making it easy to integrate with logging, storage, and UI
 - **Abort support** — safely abort an in-flight run while keeping content already received
 - **Minimal dependencies** — only `@sinclair/typebox` as a runtime dependency (the OpenAI adapter defines TypeScript types only, no `openai` package)
@@ -68,6 +69,14 @@ const agent = createAgent({ transport, tools: [getWeather] });
 
 const handle = agent.run({
   messages: [{ role: "user", content: "What is the weather in Beijing today?" }],
+  hooks: {
+    beforeToolExecute: ({ tool }) => {
+      if (tool.name === "get_weather" && !isLocationAllowed()) {
+        return { result: "<tool_error>weather access is not allowed</tool_error>" };
+      }
+    },
+    afterToolExecute: ({ result }) => ({ result: redact(result) }),
+  },
 });
 
 handle.subscribe((event) => {

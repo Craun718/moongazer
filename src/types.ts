@@ -36,6 +36,139 @@ export interface ToolExecutionContext {
   signal: AbortSignal;
 }
 
+export type MaybePromise<T> = T | Promise<T>;
+
+export interface StopResult {
+  stop: true;
+  reason?: string;
+}
+
+export interface AgentHookBase {
+  runId: string;
+  signal: AbortSignal;
+}
+
+export interface RunStartContext extends AgentHookBase {
+  messages: readonly AgentMessage[];
+}
+
+export interface RunEndContext extends AgentHookBase {
+  status: "done" | "error" | "abort" | "stopped";
+  steps: number;
+  messages: readonly AgentMessage[];
+  error?: unknown;
+}
+
+export interface ToolsPhaseContext extends AgentHookBase {
+  reason: "initial" | "invalidated";
+  source?: ToolSource;
+}
+
+export interface ToolsMutationResult {
+  tools?: AgentTool[];
+}
+
+export interface ToolsResolvedContext extends AgentHookBase {
+  reason: "initial" | "invalidated";
+  source?: ToolSource;
+  tools: readonly AgentTool[];
+}
+
+export interface ModelRequestContext extends AgentHookBase {
+  step: number;
+  maxSteps: number;
+}
+
+export interface ModelRequestMutationResult {
+  messages?: AgentMessage[];
+  tools?: AgentTool[];
+}
+
+export interface BeforeModelRequestInput {
+  messages: readonly AgentMessage[];
+  tools: readonly AgentTool[];
+}
+
+export interface ModelResponseContext extends AgentHookBase {
+  step: number;
+  message: AgentMessage;
+  toolCalls: readonly ToolCallPart[];
+  finishReason?: string;
+}
+
+export interface ModelResponseMutationResult {
+  message?: AgentMessage;
+  toolCalls?: ToolCallPart[];
+}
+
+export interface ToolExecutionContextData extends AgentHookBase {
+  step: number;
+  call: ToolCallPart;
+  tool?: AgentTool;
+}
+
+export interface ToolArgsMutationResult {
+  args?: Record<string, unknown>;
+}
+
+export interface ToolShortCircuitResult {
+  result: string;
+}
+
+export interface BeforeToolExecuteInput extends ToolArgsMutationResult {
+  args: Readonly<Record<string, unknown>>;
+}
+
+export interface AfterToolExecuteInput {
+  args: Readonly<Record<string, unknown>>;
+  result: string;
+  error?: unknown;
+  durationMs: number;
+  shortCircuited: boolean;
+}
+
+export interface ToolResultMutationResult {
+  result?: string;
+}
+
+export interface ContinueContext extends AgentHookBase {
+  step: number;
+  maxSteps: number;
+  messages: readonly AgentMessage[];
+  lastToolResults: readonly string[];
+}
+
+export interface ContinueDecision {
+  continue?: boolean;
+  reason?: string;
+}
+
+export interface AgentHooks {
+  onRunStart?: (ctx: RunStartContext) => MaybePromise<void>;
+  onRunEnd?: (ctx: RunEndContext) => MaybePromise<void>;
+
+  beforeToolsResolved?: (ctx: ToolsPhaseContext) => MaybePromise<void>;
+  afterToolsResolved?: (ctx: ToolsResolvedContext) => MaybePromise<ToolsMutationResult | void>;
+
+  beforeModelRequest?: (
+    ctx: ModelRequestContext & BeforeModelRequestInput,
+  ) => MaybePromise<ModelRequestMutationResult | StopResult | void>;
+  afterModelResponse?: (
+    ctx: ModelResponseContext,
+  ) => MaybePromise<ModelResponseMutationResult | StopResult | void>;
+
+  beforeToolExecute?: (
+    ctx: ToolExecutionContextData & BeforeToolExecuteInput,
+  ) => MaybePromise<ToolArgsMutationResult | ToolShortCircuitResult | StopResult | void>;
+  afterToolExecute?: (
+    ctx: ToolExecutionContextData & AfterToolExecuteInput,
+  ) => MaybePromise<ToolResultMutationResult | StopResult | void>;
+
+  shouldContinue?: (ctx: ContinueContext) => MaybePromise<ContinueDecision | void>;
+}
+
+export type RunHooks = AgentHooks;
+
 export interface AgentTool<T extends TObject = TObject> {
   name: string;
   description: string;
@@ -70,13 +203,22 @@ export type AgentEvent =
   | { type: "assistant_start" }
   | { type: "content"; delta: string }
   | { type: "tool_calls"; calls: ToolCallPart[] }
-  | { type: "tool_result"; id: string; result: string }
+  | {
+      type: "tool_result";
+      id: string;
+      result: string;
+      name?: string;
+      durationMs?: number;
+    }
   | { type: "done" }
   | { type: "error"; error: unknown }
   | { type: "abort" }
-  | { type: "reasoning"; delta: string };
+  | { type: "reasoning"; delta: string }
+  | { type: "stopped"; reason?: string };
 
 export interface AgentRunHandle {
+  /** Stable identifier for this run; useful for tracing and telemetry. */
+  runId: string;
   /** Subscribe to agent events. Returns an unsubscribe function. */
   subscribe(listener: (event: AgentEvent) => void): () => void;
   /** Abort the in-flight run, keeping whatever was already received. */

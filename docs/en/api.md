@@ -17,6 +17,7 @@ src/
 ## Table of Contents
 
 - [createAgent](#createagent)
+- [AgentHooks](#agenthooks)
 - [createOpenAITransport](#createopentransport)
 - [createEmitter](#createemitter)
 - [ChatTransport](#chattransport)
@@ -40,11 +41,13 @@ function createAgent(options: AgentOptions): Agent;
 
 ### AgentOptions
 
-| Property    | Type            | Default      | Description              |
-| ----------- | --------------- | ------------ | ------------------------ |
-| `transport` | `ChatTransport` | — (required) | Streaming chat transport |
-| `tools`     | `AgentTool[]`   | `[]`         | Initial tool list        |
-| `maxSteps`  | `number`        | `6`          | Max tool round-trips     |
+| Property      | Type            | Default      | Description                     |
+| ------------- | --------------- | ------------ | ------------------------------- |
+| `transport`   | `ChatTransport` | — (required) | Streaming chat transport        |
+| `tools`       | `AgentTool[]`   | `[]`         | Initial tool list               |
+| `toolSources` | `ToolSource[]`  | `[]`         | Refreshable remote tool sources |
+| `maxSteps`    | `number`        | `6`          | Max tool round-trips            |
+| `hooks`       | `AgentHooks`    | —            | Hooks shared by every run       |
 
 ### Agent
 
@@ -63,6 +66,7 @@ interface Agent {
 | ---------- | ---------------- | ------------ | ---------------------------------- |
 | `messages` | `AgentMessage[]` | — (required) | Conversation history (not mutated) |
 | `signal`   | `AbortSignal`    | —            | External abort signal              |
+| `hooks`    | `RunHooks`       | —            | Hooks scoped to this run           |
 
 #### Example
 
@@ -79,6 +83,102 @@ const handle = agent.run({
 
 handle.subscribe((event) => {
   if (event.type === "content") process.stdout.write(event.delta);
+});
+```
+
+---
+
+## AgentHooks
+
+Hooks are decision points in the agent runtime. They complement `AgentEvent`: events are read-only notifications, while hooks can modify request data, short-circuit work, or stop a run.
+
+```text
+run start
+  -> tool source discovery / refresh
+  -> each model round
+     -> beforeModelRequest
+     -> transport streaming
+     -> afterModelResponse
+     -> beforeToolExecute
+     -> tool execute
+     -> afterToolExecute
+     -> shouldContinue
+  -> run end
+```
+
+Agent-level hooks are passed to `createAgent({ hooks })`. Run-level hooks are passed to `agent.run({ hooks })`. At the same point, agent hooks run first and run hooks run second; mutations returned by one hook are visible to the next.
+
+```typescript
+interface AgentHooks {
+  onRunStart?: (ctx: RunStartContext) => MaybePromise<void>;
+  onRunEnd?: (ctx: RunEndContext) => MaybePromise<void>;
+
+  beforeToolsResolved?: (ctx: ToolsPhaseContext) => MaybePromise<void>;
+  afterToolsResolved?: (ctx: ToolsResolvedContext) => MaybePromise<ToolsMutationResult | void>;
+
+  beforeModelRequest?: (
+    ctx: ModelRequestContext & BeforeModelRequestInput,
+  ) => MaybePromise<ModelRequestMutationResult | StopResult | void>;
+  afterModelResponse?: (
+    ctx: ModelResponseContext,
+  ) => MaybePromise<ModelResponseMutationResult | StopResult | void>;
+
+  beforeToolExecute?: (
+    ctx: ToolExecutionContextData & BeforeToolExecuteInput,
+  ) => MaybePromise<ToolArgsMutationResult | ToolShortCircuitResult | StopResult | void>;
+  afterToolExecute?: (
+    ctx: ToolExecutionContextData & AfterToolExecuteInput,
+  ) => MaybePromise<ToolResultMutationResult | StopResult | void>;
+
+  shouldContinue?: (ctx: ContinueContext) => MaybePromise<ContinueDecision | void>;
+}
+```
+
+| Hook                  | Timing                                                | Can return                             |
+| --------------------- | ----------------------------------------------------- | -------------------------------------- |
+| `onRunStart`          | Before tool discovery                                 | Observation only                       |
+| `beforeToolsResolved` | Before each `ToolSource.list()`                       | Observation only                       |
+| `afterToolsResolved`  | After local/source merge and local-name precedence    | `{ tools }`                            |
+| `beforeModelRequest`  | Before each transport request                         | messages, tools, or stop               |
+| `afterModelResponse`  | After stream completion, before tools run             | assistant message, tool calls, or stop |
+| `beforeToolExecute`   | After argument parsing, defaults, and validation      | args, short-circuit result, or stop    |
+| `afterToolExecute`    | After execution or an isolated tool error             | result or stop                         |
+| `shouldContinue`      | After a round when built-in rules allow another round | `{ continue: false }`                  |
+| `onRunEnd`            | After the terminal event                              | Observation only                       |
+
+Key rules:
+
+- Hook inputs use readonly arrays; return replacement arrays instead of mutating inputs.
+- `beforeModelRequest` messages affect only that provider request and are not added to the transcript.
+- `beforeModelRequest` tools are both advertised and used for execution lookup.
+- Returned tool lists cannot contain duplicate names.
+- Arguments returned by `beforeToolExecute` are defaulted and validated again.
+- A `beforeToolExecute` result skips `tool.execute`; `afterToolExecute` still runs with `shortCircuited: true`.
+- Unknown tools still invoke tool hooks with `tool: undefined`.
+- Tool failures, invalid arguments, and ordinary tool-hook failures become `<tool_error>` results.
+- Discovery, model, `shouldContinue`, and `onRunStart` hook failures terminate the run.
+- A stop result emits `stopped`; external cancellation or `handle.stop()` emits `abort`.
+- `onRunEnd` runs once for every terminal state; its own failure is logged without replacing the terminal event.
+- `shouldContinue` cannot extend a run beyond `maxSteps`.
+
+```typescript
+const handle = agent.run({
+  messages,
+  hooks: {
+    beforeModelRequest: ({ messages, tools }) => ({
+      messages: [...messages, { role: "system", content: `Tenant: ${tenantId}` }],
+      tools: tools.filter((tool) => permissions.canCall(tool.name)),
+    }),
+    beforeToolExecute: ({ tool }) => {
+      if (!tool || !permissions.canCall(tool.name)) {
+        return { result: "<tool_error>permission denied</tool_error>" };
+      }
+    },
+    afterToolExecute: ({ result }) => ({ result: redactSecrets(result) }),
+    onRunEnd: ({ status, messages }) => {
+      void saveTranscript({ status, messages });
+    },
+  },
 });
 ```
 
@@ -207,14 +307,21 @@ All events emitted by the agent runtime during a run. Subscribe via `AgentRunHan
 
 ```typescript
 type AgentEvent =
-    | { type: "assistant_start" }
-    | { type: "content"; delta: string }
-    | { type: "tool_calls"; calls: ToolCallPart[] }
-    | { type: "tool_result"; id: string; result: string }
-    | { type: "done" }
-    | { type: "error"; error: unknown }
-    | { type: "abort" };
-    | { type: "reasoning"; delta: string }
+  | { type: "assistant_start" }
+  | { type: "content"; delta: string }
+  | { type: "tool_calls"; calls: ToolCallPart[] }
+  | {
+      type: "tool_result";
+      id: string;
+      result: string;
+      name?: string;
+      durationMs?: number;
+    }
+  | { type: "done" }
+  | { type: "error"; error: unknown }
+  | { type: "abort" }
+  | { type: "reasoning"; delta: string }
+  | { type: "stopped"; reason?: string };
 ```
 
 | Type              | Description                                                 |
@@ -227,6 +334,7 @@ type AgentEvent =
 | `error`           | Run encountered an error                                    |
 | `abort`           | Run was aborted                                             |
 | `reasoning`       | Reasoning text delta from the model (e.g. chain-of-thought) |
+| `stopped`         | A hook explicitly stopped the run                           |
 
 ---
 
@@ -319,13 +427,15 @@ Controls a running agent.
 
 ```typescript
 interface AgentRunHandle {
+  runId: string;
   subscribe(listener: (event: AgentEvent) => void): () => void;
   stop(): void;
 }
 ```
 
-| Method      | Description                                                |
+| Member      | Description                                                |
 | ----------- | ---------------------------------------------------------- |
+| `runId`     | Stable identifier for tracing and telemetry                |
 | `subscribe` | Subscribe to agent events; returns an unsubscribe function |
 | `stop`      | Abort the run, keeping partial content received            |
 
