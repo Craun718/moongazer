@@ -71,7 +71,7 @@ const handle = agent.run({
   messages: [{ role: "user", content: "北京今天天气怎么样？" }],
   hooks: {
     beforeToolExecute: ({ tool }) => {
-      if (tool.name === "get_weather" && !isLocationAllowed()) {
+      if (tool?.name === "get_weather" && !isLocationAllowed()) {
         return { result: "<tool_error>weather access is not allowed</tool_error>" };
       }
     },

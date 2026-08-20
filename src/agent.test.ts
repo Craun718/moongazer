@@ -913,6 +913,30 @@ describe("agent hooks", () => {
     expect(events.at(-1)).toMatchObject({ type: "done" });
   });
 
+  it("isolates non-error tool hook failures", async () => {
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "deny", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [{ name: "deny", description: "", parameters: Type.Object({}), execute: () => "ok" }],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      beforeToolExecute: () => {
+        throw "policy failure";
+      },
+    });
+
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+    expect(result?.result).toBe(`<tool_error name="deny">policy failure</tool_error>`);
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+  });
+
   it("short-circuits tool execution and records metadata in afterToolExecute", async () => {
     const after: Array<{ result: string; shortCircuited: boolean; durationMs: number }> = [];
     const transport = scriptedTransport([
@@ -1123,6 +1147,36 @@ describe("agent hooks", () => {
     expect(events.at(-1)).toMatchObject({ type: "stopped", reason: "policy" });
     expect(endStatuses).toEqual(["stopped"]);
     expect(events.some((event) => event.type === "tool_result")).toBe(false);
+  });
+
+  it("continues onRunEnd hooks when an earlier hook fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const failure = new Error("end hook boom");
+      const order: string[] = [];
+      const transport = scriptedTransport([[{ type: "content", delta: "done" }]]);
+      const agent = createAgent({
+        transport,
+        hooks: {
+          onRunEnd: async () => {
+            order.push("agent");
+            throw failure;
+          },
+        },
+      });
+
+      const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+        onRunEnd: () => {
+          order.push("run");
+        },
+      });
+
+      expect(events.at(-1)).toMatchObject({ type: "done" });
+      expect(order).toEqual(["agent", "run"]);
+      expect(spy).toHaveBeenCalledWith("[moongazer] onRunEnd hook failed:", failure);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("observes and filters resolved ToolSource tools at refresh boundaries", async () => {

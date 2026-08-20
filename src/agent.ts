@@ -86,8 +86,17 @@ function serializeResult(outcome: unknown): string {
   return typeof outcome === "string" ? outcome : JSON.stringify(outcome);
 }
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  try {
+    return String(err);
+  } catch {
+    return Object.prototype.toString.call(err);
+  }
+}
+
 function toolError(name: string, err: unknown): string {
-  return `<tool_error name="${name}">${(err as Error).message}</tool_error>`;
+  return `<tool_error name="${name}">${errorMessage(err)}</tool_error>`;
 }
 
 function assertUniqueTools(tools: readonly AgentTool[]): void {
@@ -532,8 +541,8 @@ export function createAgent(options: AgentOptions): Agent {
           }
         } finally {
           if (terminalEvent) emitter.emit(terminalEvent);
-          try {
-            for (const hook of getHooks("onRunEnd")) {
+          for (const hook of getHooks("onRunEnd")) {
+            try {
               await hook({
                 runId,
                 signal: controller.signal,
@@ -542,22 +551,21 @@ export function createAgent(options: AgentOptions): Agent {
                 messages: [...context],
                 ...(endError === undefined ? {} : { error: endError }),
               });
+            } catch (err) {
+              console.error("[moongazer] onRunEnd hook failed:", err);
             }
-          } catch (err) {
-            console.error("[moongazer] onRunEnd hook failed:", err);
-          } finally {
-            for (const unsub of unsubs) {
-              try {
-                unsub();
-              } catch {
-                /* ignore unsubscribe errors */
-              }
-            }
-            if (onExternalAbort && signal && !signal.aborted) {
-              signal.removeEventListener("abort", onExternalAbort);
-            }
-            emitter.close();
           }
+          for (const unsub of unsubs) {
+            try {
+              unsub();
+            } catch {
+              /* ignore unsubscribe errors */
+            }
+          }
+          if (onExternalAbort && signal && !signal.aborted) {
+            signal.removeEventListener("abort", onExternalAbort);
+          }
+          emitter.close();
         }
       };
 
