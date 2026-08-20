@@ -673,6 +673,87 @@ describe("agent hooks", () => {
     expect(finalMessages.some((message) => message.role === "system")).toBe(false);
   });
 
+  it("honors an empty tool replacement from beforeModelRequest", async () => {
+    const requestedTools: string[][] = [];
+    let executed = false;
+    const transport: ChatTransport = {
+      async *stream({ tools }) {
+        requestedTools.push(tools.map((tool) => tool.name));
+        if (requestedTools.length === 1) {
+          yield {
+            type: "tool_calls",
+            calls: [{ id: "blocked", name: "secret", arguments: "{}" }],
+          };
+        } else {
+          yield { type: "content", delta: "done" };
+        }
+      },
+    };
+    const agent = createAgent({
+      transport,
+      tools: [
+        {
+          name: "secret",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => {
+            executed = true;
+            return "secret-result";
+          },
+        },
+      ],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      beforeModelRequest: ({ messages }) => ({ messages: [...messages], tools: [] }),
+    });
+
+    expect(requestedTools).toEqual([[], []]);
+    expect(executed).toBe(false);
+    expect(events).toContainEqual({
+      type: "tool_result",
+      id: "blocked",
+      result: "Unknown tool: secret",
+      name: "secret",
+      durationMs: expect.any(Number),
+    });
+  });
+
+  it("honors an empty tool replacement from afterToolsResolved", async () => {
+    let executed = false;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "blocked", name: "local", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        {
+          name: "local",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => {
+            executed = true;
+            return "local-result";
+          },
+        },
+      ],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      afterToolsResolved: () => ({ tools: [] }),
+    });
+
+    expect(executed).toBe(false);
+    expect(events).toContainEqual({
+      type: "tool_result",
+      id: "blocked",
+      result: "Unknown tool: local",
+      name: "local",
+      durationMs: expect.any(Number),
+    });
+  });
+
   it("applies finalized model-response mutations before tools run", async () => {
     const calls: string[] = [];
     const transport = scriptedTransport([
@@ -719,6 +800,83 @@ describe("agent hooks", () => {
     expect(toolEvent?.calls[0]?.name).toBe("safe_tool");
     expect(result?.result).toBe("safe:7");
     expect(calls).toEqual([]);
+  });
+
+  it("honors an empty call replacement from afterModelResponse", async () => {
+    let rounds = 0;
+    const transport: ChatTransport = {
+      async *stream() {
+        rounds += 1;
+        yield {
+          type: "tool_calls",
+          calls: [{ id: "blocked", name: "noop", arguments: "{}" }],
+        };
+      },
+    };
+    const agent = createAgent({
+      transport,
+      tools: [{ name: "noop", description: "", parameters: Type.Object({}), execute: () => "ok" }],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      afterModelResponse: () => ({ toolCalls: [] }),
+    });
+
+    expect(rounds).toBe(1);
+    expect(events.some((event) => event.type === "tool_calls")).toBe(false);
+    expect(events.some((event) => event.type === "tool_result")).toBe(false);
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+  });
+
+  it("passes current response mutations to chained afterModelResponse hooks", async () => {
+    let runHookMessageName: string | undefined;
+    let runHookCallName: string | undefined;
+    let rawExecuted = false;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "raw", name: "raw_tool", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        {
+          name: "raw_tool",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => {
+            rawExecuted = true;
+            return "raw-result";
+          },
+        },
+        {
+          name: "safe_tool",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => "safe-result",
+        },
+      ],
+      hooks: {
+        afterModelResponse: ({ toolCalls }) => ({
+          toolCalls: [{ id: toolCalls[0]!.id, name: "safe_tool", arguments: "{}" }],
+        }),
+      },
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      afterModelResponse: ({ message, toolCalls }) => {
+        runHookMessageName = message.toolCalls?.[0]?.name;
+        runHookCallName = toolCalls[0]?.name;
+      },
+    });
+
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+    expect(runHookMessageName).toBe("safe_tool");
+    expect(runHookCallName).toBe("safe_tool");
+    expect(rawExecuted).toBe(false);
+    expect(result?.result).toBe("safe-result");
   });
 
   it("validates arguments mutated by beforeToolExecute", async () => {

@@ -218,7 +218,7 @@ export function createAgent(options: AgentOptions): Agent {
             });
             throwIfAborted();
             if (isStopResult(result)) stopFromHook(result.reason);
-            if (result?.tools) {
+            if (result?.tools !== undefined) {
               assertUniqueTools(result.tools);
               resolved = result.tools;
             }
@@ -400,8 +400,8 @@ export function createAgent(options: AgentOptions): Agent {
               });
               throwIfAborted();
               if (isStopResult(outcome)) stopFromHook(outcome.reason);
-              if (outcome?.messages) requestMessages = [...outcome.messages];
-              if (outcome?.tools) {
+              if (outcome?.messages !== undefined) requestMessages = [...outcome.messages];
+              if (outcome?.tools !== undefined) {
                 assertUniqueTools(outcome.tools);
                 requestTools = [...outcome.tools];
               }
@@ -445,17 +445,26 @@ export function createAgent(options: AgentOptions): Agent {
                 runId,
                 signal: controller.signal,
                 step: steps,
-                message: { ...assistantMessage },
-                toolCalls: [...roundCalls],
+                message: {
+                  ...assistantMessage,
+                  toolCalls: finalCalls.length > 0 ? finalCalls : undefined,
+                },
+                toolCalls: [...finalCalls],
                 finishReason,
               });
               throwIfAborted();
               if (isStopResult(outcome)) stopFromHook(outcome.reason);
-              if (outcome?.message) assistantMessage = { ...outcome.message };
-              if (outcome?.message) {
+              if (outcome?.message !== undefined) {
+                assistantMessage = { ...outcome.message };
                 finalCalls = outcome.message.toolCalls ? [...outcome.message.toolCalls] : [];
               }
-              if (outcome?.toolCalls) finalCalls = [...outcome.toolCalls];
+              if (outcome?.toolCalls !== undefined) {
+                finalCalls = [...outcome.toolCalls];
+                assistantMessage = {
+                  ...assistantMessage,
+                  toolCalls: finalCalls.length > 0 ? finalCalls : undefined,
+                };
+              }
             }
 
             const finalMessage: AgentMessage = {
