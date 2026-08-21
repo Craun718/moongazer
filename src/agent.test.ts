@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Type } from "@sinclair/typebox";
 import { createAgent } from "./agent";
 import type { Agent } from "./agent";
+import { defineTool } from "./tool";
 import type { ChatTransport, TransportEvent } from "./transport";
 import type { AgentEvent, AgentHooks, AgentMessage, AgentTool, ToolSource } from "./types";
 
@@ -1124,7 +1125,375 @@ describe("agent hooks", () => {
     });
 
     expect(received).toBe(3);
-    expect(order).toEqual(["agent-before", "run-before", "agent-after", "run-after"]);
+    expect(order).toEqual(["agent-before", "run-before", "run-after", "agent-after"]);
+  });
+
+  it("runs tool hooks inside agent and run hooks", async () => {
+    const order: string[] = [];
+    let received = 0;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "inc", arguments: '{"n":1}' }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "inc",
+          description: "",
+          parameters: Type.Object({ n: Type.Number() }),
+          execute: ({ n }) => {
+            order.push("execute");
+            received = n;
+            return "ok";
+          },
+          hooks: {
+            beforeExecute: ({ args }) => {
+              order.push("tool-before");
+              return { args: { ...args, n: 4 } };
+            },
+            afterExecute: () => {
+              order.push("tool-after");
+            },
+          },
+        }),
+      ],
+      hooks: {
+        beforeToolExecute: ({ args }) => {
+          order.push("agent-before");
+          return { args: { ...args, n: 2 } };
+        },
+        afterToolExecute: () => {
+          order.push("agent-after");
+        },
+      },
+    });
+
+    await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      beforeToolExecute: ({ args }) => {
+        order.push("run-before");
+        return { args: { ...args, n: 3 } };
+      },
+      afterToolExecute: () => {
+        order.push("run-after");
+      },
+    });
+
+    expect(received).toBe(4);
+    expect(order).toEqual([
+      "agent-before",
+      "run-before",
+      "tool-before",
+      "execute",
+      "tool-after",
+      "run-after",
+      "agent-after",
+    ]);
+  });
+
+  it("validates arguments mutated by a tool hook", async () => {
+    let executed = false;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "inc", arguments: '{"n":1}' }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "inc",
+          description: "",
+          parameters: Type.Object({ n: Type.Number() }),
+          execute: () => {
+            executed = true;
+            return "ok";
+          },
+          hooks: {
+            beforeExecute: ({ args }) => ({
+              args: { ...args, n: "bad" as unknown as number },
+            }),
+          },
+        }),
+      ],
+    });
+
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+
+    expect(executed).toBe(false);
+    expect(result?.result).toContain('Invalid arguments for tool "inc"');
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+  });
+
+  it("short-circuits from a tool hook and exposes metadata to outer hooks", async () => {
+    const seen: Array<{ result: string; shortCircuited: boolean }> = [];
+    let executed = false;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "deny", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "deny",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => {
+            executed = true;
+            return "should-not-run";
+          },
+          hooks: {
+            beforeExecute: () => ({ result: "tool denied" }),
+            afterExecute: ({ result, shortCircuited }) => {
+              seen.push({ result, shortCircuited });
+            },
+          },
+        }),
+      ],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      afterToolExecute: ({ result, shortCircuited }) => {
+        seen.push({ result, shortCircuited });
+      },
+    });
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+
+    expect(executed).toBe(false);
+    expect(result?.result).toBe("tool denied");
+    expect(seen).toEqual([
+      { result: "tool denied", shortCircuited: true },
+      { result: "tool denied", shortCircuited: true },
+    ]);
+  });
+
+  it("rewrites success and error results from tool after hooks", async () => {
+    const outerResults = new Map<string, string>();
+    const outerErrors: unknown[] = [];
+    const transport = scriptedTransport([
+      [
+        {
+          type: "tool_calls",
+          calls: [
+            { id: "ok", name: "read", arguments: "{}" },
+            { id: "bad", name: "boom", arguments: "{}" },
+          ],
+        },
+      ],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "read",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => "secret-token",
+          hooks: { afterExecute: () => ({ result: "redacted" }) },
+        }),
+        defineTool({
+          name: "boom",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => {
+            throw new Error("kaboom");
+          },
+          hooks: { afterExecute: () => ({ result: "recovered" }) },
+        }),
+      ],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      afterToolExecute: ({ call, result, error }) => {
+        outerResults.set(call.id, result);
+        if (error !== undefined) outerErrors.push(error);
+      },
+    });
+    const results = events.filter(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+
+    expect(results.map((event) => event.result)).toEqual(["redacted", "recovered"]);
+    expect(outerResults).toEqual(
+      new Map([
+        ["ok", "redacted"],
+        ["bad", "recovered"],
+      ]),
+    );
+    expect((outerErrors[0] as Error).message).toBe("kaboom");
+  });
+
+  it("skips tool hooks when an outer hook short-circuits", async () => {
+    let localBeforeRan = false;
+    let localAfterRan = false;
+    let outerAfterRan = false;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "deny", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "deny",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => "should-not-run",
+          hooks: {
+            beforeExecute: () => {
+              localBeforeRan = true;
+            },
+            afterExecute: () => {
+              localAfterRan = true;
+            },
+          },
+        }),
+      ],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      beforeToolExecute: () => ({ result: "outer denied" }),
+      afterToolExecute: () => {
+        outerAfterRan = true;
+      },
+    });
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+
+    expect(result?.result).toBe("outer denied");
+    expect(localBeforeRan).toBe(false);
+    expect(localAfterRan).toBe(false);
+    expect(outerAfterRan).toBe(true);
+  });
+
+  it("isolates tool hook failures while outer hooks still run", async () => {
+    let outerError: unknown;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "deny", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "deny",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => "ok",
+          hooks: {
+            beforeExecute: () => {
+              throw "tool policy failure";
+            },
+          },
+        }),
+      ],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      afterToolExecute: ({ error }) => {
+        outerError = error;
+      },
+    });
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+
+    expect(result?.result).toBe(`<tool_error name="deny">tool policy failure</tool_error>`);
+    expect(outerError).toBe("tool policy failure");
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+  });
+
+  it("does not run tool hooks for unknown tools", async () => {
+    let localHookRan = false;
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "ghost", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "known",
+          description: "",
+          parameters: Type.Object({}),
+          execute: () => "ok",
+          hooks: {
+            beforeExecute: () => {
+              localHookRan = true;
+            },
+          },
+        }),
+      ],
+    });
+
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+
+    expect(localHookRan).toBe(false);
+    expect(result?.result).toBe("Unknown tool: ghost");
+  });
+
+  it("keeps tool hook state independent for concurrent calls", async () => {
+    const received: Array<{ id: string; marker?: string }> = [];
+    const transport = scriptedTransport([
+      [
+        {
+          type: "tool_calls",
+          calls: [
+            { id: "a", name: "tag", arguments: '{"id":"a"}' },
+            { id: "b", name: "tag", arguments: '{"id":"b"}' },
+          ],
+        },
+      ],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        defineTool({
+          name: "tag",
+          description: "",
+          parameters: Type.Object({
+            id: Type.String(),
+            marker: Type.Optional(Type.String()),
+          }),
+          execute: ({ id, marker }) => {
+            received.push({ id, marker });
+            return id;
+          },
+          hooks: {
+            beforeExecute: ({ args, call }) => ({ args: { ...args, marker: call.id } }),
+          },
+        }),
+      ],
+    });
+
+    const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+    const results = events.filter(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+
+    expect(received).toEqual([
+      { id: "a", marker: "a" },
+      { id: "b", marker: "b" },
+    ]);
+    expect(results.map((event) => event.result)).toEqual(["a", "b"]);
   });
 
   it("emits stopped when a hook requests a stop and still runs onRunEnd", async () => {

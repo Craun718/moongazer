@@ -1,5 +1,5 @@
 import type { TObject, Static } from "@sinclair/typebox";
-import type { AgentTool, ToolExecutionContext } from "./types";
+import type { AgentTool, ToolExecutionContext, ToolHooks } from "./types";
 
 /**
  * Define a tool from a TypeBox schema.
@@ -24,6 +24,8 @@ export function defineTool<T extends TObject>(opts: {
   /** TypeBox object schema; also serves as the JSON Schema sent to the model. */
   parameters: T;
   execute: (args: Static<T>, ctx: ToolExecutionContext) => Promise<unknown> | unknown;
+  /** Optional hooks owned by this tool. */
+  hooks?: ToolHooks<T>;
 }): AgentTool<T> {
   return opts;
 }

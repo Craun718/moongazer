@@ -100,13 +100,25 @@ run start
      -> transport streaming
      -> afterModelResponse
      -> beforeToolExecute
+     -> tool hooks.beforeExecute
      -> tool execute
+     -> tool hooks.afterExecute
      -> afterToolExecute
      -> shouldContinue
   -> run end
 ```
 
-Agent-level hooks are passed to `createAgent({ hooks })`. Run-level hooks are passed to `agent.run({ hooks })`. At the same point, agent hooks run first and run hooks run second; mutations returned by one hook are visible to the next.
+Agent-level hooks are passed to `createAgent({ hooks })`. Run-level hooks are passed to `agent.run({ hooks })`. Before work begins, agent hooks run first and run hooks run second. After tool execution, the order is reversed so the pairs behave like nested middleware; mutations returned by one hook are visible to the next.
+
+```text
+agent beforeToolExecute
+  -> run beforeToolExecute
+  -> tool hooks.beforeExecute
+  -> tool execute
+  -> tool hooks.afterExecute
+  -> run afterToolExecute
+  -> agent afterToolExecute
+```
 
 ```typescript
 interface AgentHooks {
@@ -134,6 +146,17 @@ interface AgentHooks {
 }
 ```
 
+Tools may also define their own hooks with `hooks`. Their argument and mutation types are inferred from the tool's TypeBox schema. They are intended for tool-specific normalization, result shaping, and error recovery. Platform concerns such as authorization, audit logging, redaction, and telemetry belong in agent/run hooks.
+
+```typescript
+interface ToolHooks<T extends TObject = TObject> {
+  beforeExecute?: (
+    ctx: ToolBeforeExecuteInput<T>,
+  ) => MaybePromise<ToolExecuteMutationResult<T> | ToolShortCircuitResult | void>;
+  afterExecute?: (ctx: ToolAfterExecuteInput<T>) => MaybePromise<ToolResultMutationResult | void>;
+}
+```
+
 | Hook                  | Timing                                                | Can return                             |
 | --------------------- | ----------------------------------------------------- | -------------------------------------- |
 | `onRunStart`          | Before tool discovery                                 | Observation only                       |
@@ -154,7 +177,11 @@ Key rules:
 - Returned tool lists cannot contain duplicate names.
 - Arguments returned by `beforeToolExecute` are defaulted and validated again.
 - A `beforeToolExecute` result skips `tool.execute`; `afterToolExecute` still runs with `shortCircuited: true`.
-- Unknown tools still invoke tool hooks with `tool: undefined`.
+- An agent/run `beforeToolExecute` short-circuit also skips tool-local hooks.
+- Unknown tools still invoke agent/run tool hooks with `tool: undefined`.
+- Tool-local hooks do not run for unknown tools and cannot return `{ stop: true }`.
+- `hooks.beforeExecute` arguments are also defaulted and validated again; a returned result skips `execute`.
+- Tool-local hook failures become isolated `<tool_error>` results, after which agent/run hooks still run.
 - Tool failures, invalid arguments, and ordinary tool-hook failures become `<tool_error>` results.
 - Discovery, model, `shouldContinue`, and `onRunStart` hook failures terminate the run.
 - A stop result emits `stopped`; external cancellation or `handle.stop()` emits `abort`.
@@ -383,10 +410,12 @@ interface AgentTool<T extends TObject = TObject> {
   /** TypeBox object schema; serialized as JSON Schema for the model */
   parameters: T;
   execute: (args: Static<T>) => Promise<unknown> | unknown;
+  /** Optional hooks owned by this tool */
+  hooks?: ToolHooks<T>;
 }
 ```
 
-Before each invocation, the agent runtime runs `Value.Default(tool.parameters, parsedArgs)` to fill schema `default` values, then `Value.Assert(tool.parameters, ...)` to validate. `execute` receives the validated value; invalid tool arguments are surfaced as an `error` event instead of being silently coerced.
+Before each invocation, the agent runtime runs `Value.Default(tool.parameters, parsedArgs)` to fill schema `default` values, then `Value.Assert(tool.parameters, ...)` to validate. `execute` receives the validated value; invalid tool arguments are returned to the model as a `<tool_error>` result instead of being silently coerced.
 
 ## defineTool
 
@@ -398,6 +427,7 @@ function defineTool<T extends TObject>(opts: {
   description: string;
   parameters: T;
   execute: (args: Static<T>) => Promise<unknown> | unknown;
+  hooks?: ToolHooks<T>;
 }): AgentTool<T>;
 ```
 

@@ -131,6 +131,34 @@ export interface ToolResultMutationResult {
   result?: string;
 }
 
+export interface ToolHookBase {
+  call: ToolCallPart;
+  signal: AbortSignal;
+}
+
+export interface ToolBeforeExecuteInput<T extends TObject = TObject> extends ToolHookBase {
+  args: Readonly<Static<T>>;
+}
+
+export interface ToolAfterExecuteInput<T extends TObject = TObject> extends ToolHookBase {
+  args: Readonly<Static<T>>;
+  result: string;
+  error?: unknown;
+  durationMs: number;
+  shortCircuited: boolean;
+}
+
+export interface ToolExecuteMutationResult<T extends TObject = TObject> {
+  args?: Static<T>;
+}
+
+export interface ToolHooks<T extends TObject = TObject> {
+  beforeExecute?(
+    ctx: ToolBeforeExecuteInput<T>,
+  ): MaybePromise<ToolExecuteMutationResult<T> | ToolShortCircuitResult | void>;
+  afterExecute?(ctx: ToolAfterExecuteInput<T>): MaybePromise<ToolResultMutationResult | void>;
+}
+
 export interface ContinueContext extends AgentHookBase {
   step: number;
   maxSteps: number;
@@ -177,7 +205,9 @@ export interface AgentTool<T extends TObject = TObject> {
    * JSON Schema sent to the model (symbol metadata is stripped on serialization).
    */
   parameters: T;
-  execute: (args: Static<T>, ctx: ToolExecutionContext) => Promise<unknown> | unknown;
+  execute(args: Static<T>, ctx: ToolExecutionContext): Promise<unknown> | unknown;
+  /** Hooks owned by this tool. They run inside agent/run-level tool hooks. */
+  hooks?: ToolHooks<T>;
 }
 
 /**

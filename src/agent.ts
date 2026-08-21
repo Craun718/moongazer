@@ -288,9 +288,12 @@ export function createAgent(options: AgentOptions): Agent {
           let error: unknown;
           let shortCircuited = false;
           let result: string | undefined;
+          let toolHooksEntered = false;
 
           const beforeHooks = getHooks("beforeToolExecute");
-          const afterHooks = getHooks("afterToolExecute");
+          const afterHooks = [...getHooks("afterToolExecute")].reverse();
+          const toolBeforeHook = tool?.hooks?.beforeExecute;
+          const toolAfterHook = tool?.hooks?.afterExecute;
 
           try {
             throwIfAborted();
@@ -320,6 +323,26 @@ export function createAgent(options: AgentOptions): Agent {
               }
             }
 
+            if (result === undefined && tool) {
+              toolHooksEntered = true;
+            }
+
+            if (result === undefined && toolBeforeHook) {
+              const outcome = await toolBeforeHook({
+                call,
+                signal: controller.signal,
+                args: { ...args },
+              });
+              throwIfAborted();
+              if (outcome && "result" in outcome && outcome.result !== undefined) {
+                result = outcome.result;
+                shortCircuited = true;
+              } else if (outcome && "args" in outcome && outcome.args !== undefined) {
+                args = outcome.args;
+                if (tool) args = prepareArgs(call.name, tool, args);
+              }
+            }
+
             if (result === undefined) {
               const outcome = tool
                 ? await tool.execute(args, { signal: controller.signal })
@@ -331,6 +354,27 @@ export function createAgent(options: AgentOptions): Agent {
             if (err instanceof HookStopError || controller.signal.aborted) throw err;
             error = err;
             result = toolError(call.name, err);
+          }
+
+          if (toolHooksEntered && toolAfterHook) {
+            try {
+              const outcome = await toolAfterHook({
+                call,
+                signal: controller.signal,
+                args: { ...args },
+                result: result as string,
+                ...(error === undefined ? {} : { error }),
+                durationMs: Date.now() - startedAt,
+                shortCircuited,
+              });
+              throwIfAborted();
+              if (outcome?.result !== undefined) result = outcome.result;
+            } catch (err) {
+              if (stopRequested && hookStopError) throw hookStopError;
+              if (err instanceof HookStopError || controller.signal.aborted) throw err;
+              error = err;
+              result = toolError(call.name, err);
+            }
           }
 
           try {

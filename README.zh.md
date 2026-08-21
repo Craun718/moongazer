@@ -14,7 +14,7 @@
 - **类型安全工具** — 用 TypeBox schema 定义工具；`execute` 入参类型由 schema 推断，运行时通过 `Value.Default` + `Value.Assert` 对模型 JSON 填充默认值并严格校验（不合法参数会报错而非静默转换）
 - **推理内容** — 从支持 `reasoning_content` 的模型（如 OpenAI o1/o3）中流式输出 `reasoning` 增量事件
 - **工具调用** — 原生支持函数调用，自动拼接流式工具参数片段
-- **生命周期 hooks** — 在模型请求、工具授权/审计、结果改写和继续决策等边界插入 agent 级或 run 级逻辑
+- **生命周期 hooks** — 在模型请求、工具授权/审计、结果改写和继续决策等边界插入 agent 级、run 级或工具级逻辑
 - **事件驱动** — 代理运行时通过订阅者模式暴露 `AgentEvent`，便于日志、存储和 UI 集成
 - **中止支持** — 安全地中止正在运行中的轮次，保留已收到的内容
 - **最小依赖** — 仅 `@sinclair/typebox` 一个运行时依赖（OpenAI 适配器只定义 TypeScript 类型，无 `openai` 包依赖）

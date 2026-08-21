@@ -100,13 +100,25 @@ run start
      -> transport streaming
      -> afterModelResponse
      -> beforeToolExecute
+     -> tool hooks.beforeExecute
      -> tool execute
+     -> tool hooks.afterExecute
      -> afterToolExecute
      -> shouldContinue
   -> run end
 ```
 
-Agent 级 hooks 通过 `createAgent({ hooks })` 传入；run 级 hooks 通过 `agent.run({ hooks })` 传入。同一 hook 点先执行 agent hooks，再执行 run hooks；前一个 hook 返回的修改对后一个 hook 可见。
+Agent 级 hooks 通过 `createAgent({ hooks })` 传入；run 级 hooks 通过 `agent.run({ hooks })` 传入。进入工作前先执行 agent hooks，再执行 run hooks；工具执行完成后顺序反向，使两层 hook像嵌套 middleware 一样工作。前一个 hook 返回的修改对后一个 hook 可见。
+
+```text
+agent beforeToolExecute
+  -> run beforeToolExecute
+  -> tool hooks.beforeExecute
+  -> tool execute
+  -> tool hooks.afterExecute
+  -> run afterToolExecute
+  -> agent afterToolExecute
+```
 
 ```typescript
 interface AgentHooks {
@@ -134,6 +146,17 @@ interface AgentHooks {
 }
 ```
 
+工具也可以通过 `hooks` 定义属于自己的 hooks。参数和修改类型由工具的 TypeBox schema 推断，适合处理工具专属的参数归一化、结果转换和错误恢复。权限校验、审计日志、脱敏、遥测等平台能力应放在 agent/run hooks。
+
+```typescript
+interface ToolHooks<T extends TObject = TObject> {
+  beforeExecute?: (
+    ctx: ToolBeforeExecuteInput<T>,
+  ) => MaybePromise<ToolExecuteMutationResult<T> | ToolShortCircuitResult | void>;
+  afterExecute?: (ctx: ToolAfterExecuteInput<T>) => MaybePromise<ToolResultMutationResult | void>;
+}
+```
+
 | Hook                  | 时机                                  | 可返回                                |
 | --------------------- | ------------------------------------- | ------------------------------------- |
 | `onRunStart`          | 工具发现前                            | 仅观察                                |
@@ -154,7 +177,11 @@ interface AgentHooks {
 - Hook 返回的工具列表不允许重复 name。
 - `beforeToolExecute` 返回的 args 会重新应用默认值并执行 schema 校验。
 - `beforeToolExecute` 返回 result 时跳过 `tool.execute`；`afterToolExecute` 仍会执行，且 `shortCircuited: true`。
-- Unknown tool 也会触发工具 hooks，其中 `tool` 为 `undefined`。
+- agent/run 的 `beforeToolExecute` 短路时，也会跳过工具本地 hooks。
+- Unknown tool 也会触发 agent/run 工具 hooks，其中 `tool` 为 `undefined`。
+- 工具本地 hooks 不会在 unknown tool 上执行，也不能返回 `{ stop: true }`。
+- `hooks.beforeExecute` 返回的 args 同样会重新应用默认值并执行 schema 校验；返回 result 时跳过 `execute`。
+- 工具本地 hook 失败会被隔离为 `<tool_error>` result，随后 agent/run hooks 仍会执行。
 - 工具失败、非法参数和普通工具 hook 失败都会转换为 `<tool_error>` result。
 - 工具发现、模型阶段、`shouldContinue` 和 `onRunStart` hook 失败会终止 run。
 - Hook 返回 stop 时发出 `stopped`；外部取消或 `handle.stop()` 发出 `abort`。
@@ -383,10 +410,12 @@ interface AgentTool<T extends TObject = TObject> {
   /** TypeBox 对象 schema；序列化为 JSON Schema 发给模型 */
   parameters: T;
   execute: (args: Static<T>) => Promise<unknown> | unknown;
+  /** 工具专属的可选 hooks */
+  hooks?: ToolHooks<T>;
 }
 ```
 
-每次调用前，代理运行时先对模型返回的 JSON 执行 `Value.Default(tool.parameters, parsedArgs)` 填充 schema 的 `default` 值，再用 `Value.Assert(tool.parameters, ...)` 严格校验。`execute` 拿到的是校验通过的值；不合法的工具参数会作为 `error` 事件抛出，而不会被静默强制转换。
+每次调用前，代理运行时先对模型返回的 JSON 执行 `Value.Default(tool.parameters, parsedArgs)` 填充 schema 的 `default` 值，再用 `Value.Assert(tool.parameters, ...)` 严格校验。`execute` 拿到的是校验通过的值；不合法的工具参数会以 `<tool_error>` result 返回给模型，而不会被静默强制转换。
 
 ## defineTool
 
@@ -398,6 +427,7 @@ function defineTool<T extends TObject>(opts: {
   description: string;
   parameters: T;
   execute: (args: Static<T>) => Promise<unknown> | unknown;
+  hooks?: ToolHooks<T>;
 }): AgentTool<T>;
 ```
 
