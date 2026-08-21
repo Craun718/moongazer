@@ -59,6 +59,7 @@ interface ToolDefinition {
 interface ToolsListResult {
   resultType?: string;
   tools?: ToolDefinition[];
+  nextCursor?: string;
 }
 interface CallToolResult {
   resultType?: string;
@@ -134,12 +135,22 @@ export async function createMcpClient(options: CreateMcpClientOptions): Promise<
   const list = async (ctx: ToolExecutionContext): Promise<AgentTool[]> => {
     // Absence of the `tools` capability means there is nothing to bridge.
     if (capabilities && typeof capabilities.tools === "undefined") return [];
-    const res = await transport.request<ToolsListResult>("tools/list", undefined, {
-      signal: ctx.signal,
-      timeout: options.defaultTimeout,
-    });
-    assertComplete(res, "tools/list");
-    const tools = Array.isArray(res?.tools) ? res.tools : [];
+    const tools: ToolDefinition[] = [];
+    let cursor: string | undefined;
+    do {
+      const res = await transport.request<ToolsListResult>(
+        "tools/list",
+        cursor === undefined ? undefined : { cursor },
+        {
+          signal: ctx.signal,
+          timeout: options.defaultTimeout,
+        },
+      );
+      assertComplete(res, "tools/list");
+      if (Array.isArray(res?.tools)) tools.push(...res.tools);
+      cursor = typeof res?.nextCursor === "string" ? res.nextCursor : undefined;
+    } while (cursor !== undefined);
+
     // Isolate per-tool schema conversion failures: one bad inputSchema skips
     // just that tool (with a warning) instead of failing the whole list.
     const result: AgentTool[] = [];

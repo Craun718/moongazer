@@ -120,6 +120,56 @@ describe("createMcpClient", () => {
     expect(new Headers(calls[2]?.[1]?.headers).get("MCP-Protocol-Version")).toBe("2025-11-25");
   });
 
+  it("follows tools/list pagination cursors", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          jsonrpc: "2.0",
+          id: 1,
+          result: {
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            capabilities: { tools: {} },
+            serverInfo: { name: "weather" },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 202 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          jsonrpc: "2.0",
+          id: 2,
+          result: {
+            tools: [{ name: "a", inputSchema: { type: "object", properties: {} } }],
+            nextCursor: "page-2",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          jsonrpc: "2.0",
+          id: 3,
+          result: {
+            tools: [{ name: "b", inputSchema: { type: "object", properties: {} } }],
+          },
+        }),
+      );
+
+    const source = await createMcpClient({ url: "https://mcp.example.com/mcp", fetch });
+    const tools = await source.list({ signal: new AbortController().signal });
+
+    expect(tools.map((tool) => tool.name)).toEqual(["weather:a", "weather:b"]);
+    const calls = fetch.mock.calls;
+    expect(calls).toHaveLength(4);
+    const firstListBody = JSON.parse(String(calls[2]?.[1]?.body));
+    expect(firstListBody.method).toBe("tools/list");
+    expect(firstListBody.params).toBeUndefined();
+    expect(JSON.parse(String(calls[3]?.[1]?.body))).toMatchObject({
+      method: "tools/list",
+      params: { cursor: "page-2" },
+    });
+  });
+
   it("resumes a disconnected 2025-11-25 SSE request with Last-Event-ID", async () => {
     const finalResponse = {
       jsonrpc: "2.0",
