@@ -264,12 +264,20 @@ export function createAgent(options: AgentOptions): Agent {
             }
           }
           const names = new Set<string>();
+          const remoteSeen = new Set<string>();
           for (const tool of remote) {
+            if (remoteSeen.has(tool.name)) {
+              throw new Error(`Duplicate tool name in tool source: "${tool.name}"`);
+            }
+            remoteSeen.add(tool.name);
             if (localNames.has(tool.name)) {
               console.warn(
                 `[moongazer] tool "${tool.name}" from source shadows local tool; skipping`,
               );
               continue;
+            }
+            if (runTools.has(tool.name) && !old?.has(tool.name)) {
+              throw new Error(`Duplicate tool name across tool sources: "${tool.name}"`);
             }
             runTools.set(tool.name, tool);
             names.add(tool.name);

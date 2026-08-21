@@ -538,6 +538,34 @@ describe("createAgent", () => {
     }
   });
 
+  it("fails explicitly when tool sources expose the same name", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const tool = (value: string): AgentTool => ({
+        name: "dup",
+        description: "",
+        parameters: Type.Object({}),
+        execute: () => value,
+      });
+      const first = makeSource([tool("first")]);
+      const second = makeSource([tool("second")]);
+      const transport = scriptedTransport([[{ type: "content", delta: "never" }]]);
+      const agent = createAgent({
+        transport,
+        toolSources: [first.source, second.source],
+      });
+
+      const events = await runToCompletion(agent, [{ role: "user", content: "go" }]);
+
+      expect(events.at(-1)).toMatchObject({
+        type: "error",
+        error: new Error('Duplicate tool name across tool sources: "dup"'),
+      });
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it("re-lists a tool source on invalidation at the next round boundary", async () => {
     const { source, setTools, invalidate, listCalls } = makeSource([]);
     const toolB: AgentTool = {
