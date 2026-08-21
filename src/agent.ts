@@ -83,7 +83,9 @@ function prepareArgs(name: string, tool: AgentTool, args: Record<string, unknown
 }
 
 function serializeResult(outcome: unknown): string {
-  return typeof outcome === "string" ? outcome : JSON.stringify(outcome);
+  if (typeof outcome === "string") return outcome;
+  const json = JSON.stringify(outcome);
+  return json === undefined ? String(outcome) : json;
 }
 
 function errorMessage(err: unknown): string {

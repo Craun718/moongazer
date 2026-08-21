@@ -336,6 +336,42 @@ describe("createAgent", () => {
     expect(events.at(-1)).toMatchObject({ type: "done" });
   });
 
+  it("serializes an undefined tool result as a string", async () => {
+    let finalMessages: readonly AgentMessage[] = [];
+    const transport = scriptedTransport([
+      [{ type: "tool_calls", calls: [{ id: "c1", name: "noop", arguments: "{}" }] }],
+      [{ type: "content", delta: "done" }],
+    ]);
+    const agent = createAgent({
+      transport,
+      tools: [
+        {
+          name: "noop",
+          description: "does nothing",
+          parameters: Type.Object({}),
+          execute: () => undefined,
+        },
+      ],
+    });
+
+    const events = await runWithHooks(agent, [{ role: "user", content: "go" }], {
+      onRunEnd: ({ messages }) => {
+        finalMessages = messages;
+      },
+    });
+
+    const result = events.find(
+      (event): event is Extract<AgentEvent, { type: "tool_result" }> =>
+        event.type === "tool_result",
+    );
+    expect(result).toMatchObject({ result: "undefined" });
+    expect(finalMessages).toContainEqual({
+      role: "tool",
+      toolCallId: "c1",
+      content: "undefined",
+    });
+  });
+
   it("isolates a throwing tool as a tool_result error string and continues", async () => {
     const boom = new Error("kaboom");
     const transport = scriptedTransport([
