@@ -1,6 +1,6 @@
 {
   "name": "@pulonia/moongazer-mcp",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Browser-native MCP Streamable HTTP tool source for @pulonia/moongazer agents.",
   "repository": {
     "type": "git",

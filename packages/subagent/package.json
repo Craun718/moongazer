@@ -1,6 +1,6 @@
 {
   "name": "@pulonia/moongazer-subagent",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Turn moongazer agents into tools for parent agents.",
   "repository": {
     "type": "git",
